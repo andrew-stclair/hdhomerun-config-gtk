@@ -137,11 +137,11 @@ on_refresh_clicked (GtkButton *button,
           struct sockaddr_storage ip_address;
           char ip_address_str[64];  /* Buffer for IPv4/IPv6 address string */
           uint32_t device_id;
-          char device_id_str[16];   /* Buffer for 8-char hex ID plus null */
+          char device_id_str[9];    /* Buffer for 8-char hex ID plus null */
           HdhomerunDeviceRow *row;
           
           device_id = hdhomerun_discover2_device_get_device_id (device);
-          g_snprintf (device_id_str, sizeof(device_id_str), "%08X", device_id);
+          g_snprintf (device_id_str, sizeof (device_id_str), "%08X", device_id);
           
           /* Iterate through all network interfaces for this device */
           device_if = hdhomerun_discover2_iter_device_if_first (device);
@@ -164,6 +164,16 @@ on_refresh_clicked (GtkButton *button,
     }
   
   hdhomerun_discover_destroy (ds);
+}
+
+static gboolean
+refresh_devices_async (gpointer user_data)
+{
+  HdhomerunWindow *self = HDHOMERUN_WINDOW (user_data);
+  
+  on_refresh_clicked (self->refresh_button, self);
+  
+  return G_SOURCE_REMOVE;
 }
 
 static void
@@ -222,6 +232,6 @@ hdhomerun_window_init (HdhomerunWindow *self)
                    self, "maximized",
                    G_SETTINGS_BIND_DEFAULT);
   
-  /* Automatically discover devices on startup */
-  on_refresh_clicked (self->refresh_button, self);
+  /* Automatically discover devices on startup (async to avoid blocking UI) */
+  g_idle_add (refresh_devices_async, self);
 }
