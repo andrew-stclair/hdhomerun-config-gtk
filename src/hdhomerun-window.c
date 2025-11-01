@@ -22,6 +22,9 @@
 #include "hdhomerun-tuner-controls.h"
 
 #include <glib/gi18n.h>
+#include <libhdhomerun/hdhomerun.h>
+
+#define HDHOMERUN_IP_STRING_SIZE 64  /* Size required by libhdhomerun API */
 
 struct _HdhomerunWindow
 {
@@ -45,19 +48,66 @@ struct _HdhomerunWindow
 G_DEFINE_FINAL_TYPE (HdhomerunWindow, hdhomerun_window, ADW_TYPE_APPLICATION_WINDOW)
 
 static void
+on_add_device_response (AdwAlertDialog *dialog,
+                        char *response,
+                        HdhomerunWindow *self)
+{
+  GtkWidget *entry;
+  const char *ip_address;
+  
+  if (g_strcmp0 (response, "add") != 0)
+    return;
+  
+  entry = g_object_get_data (G_OBJECT (dialog), "ip-entry");
+  ip_address = gtk_editable_get_text (GTK_EDITABLE (entry));
+  
+  if (ip_address && *ip_address)
+    {
+      /* Validate IP address format */
+      if (!g_hostname_is_ip_address (ip_address))
+        {
+          AdwDialog *error_dialog;
+          
+          error_dialog = adw_alert_dialog_new (_("Invalid IP Address"),
+                                              _("Please enter a valid IPv4 or IPv6 address."));
+          adw_alert_dialog_add_response (ADW_ALERT_DIALOG (error_dialog), "ok", _("_OK"));
+          adw_alert_dialog_set_default_response (ADW_ALERT_DIALOG (error_dialog), "ok");
+          adw_dialog_present (error_dialog, GTK_WIDGET (self));
+          return;
+        }
+      
+      HdhomerunDeviceRow *row;
+      
+      row = hdhomerun_device_row_new (ip_address, "Manual Device", ip_address);
+      gtk_list_box_append (self->device_list, GTK_WIDGET (row));
+      
+      g_message ("Adding device at IP: %s", ip_address);
+    }
+}
+
+static void
 on_add_device_clicked (GtkButton *button,
                        HdhomerunWindow *self)
 {
   AdwDialog *dialog;
+  GtkWidget *entry;
   
   (void)button; /* unused */
   
   dialog = adw_alert_dialog_new (_("Add Device Manually"), 
                                  _("Enter the IP address of the HDHomeRun device"));
   
+  entry = gtk_entry_new ();
+  gtk_entry_set_placeholder_text (GTK_ENTRY (entry), "192.168.1.100");
+  adw_alert_dialog_set_extra_child (ADW_ALERT_DIALOG (dialog), entry);
+  
+  g_object_set_data (G_OBJECT (dialog), "ip-entry", entry);
+  
   adw_alert_dialog_add_response (ADW_ALERT_DIALOG (dialog), "cancel", _("_Cancel"));
   adw_alert_dialog_add_response (ADW_ALERT_DIALOG (dialog), "add", _("_Add"));
   adw_alert_dialog_set_response_appearance (ADW_ALERT_DIALOG (dialog), "add", ADW_RESPONSE_SUGGESTED);
+  
+  g_signal_connect (dialog, "response", G_CALLBACK (on_add_device_response), self);
   
   adw_dialog_present (dialog, GTK_WIDGET (self));
 }
@@ -66,11 +116,79 @@ static void
 on_refresh_clicked (GtkButton *button,
                    HdhomerunWindow *self)
 {
-  (void)button; /* unused */
-  (void)self; /* unused */
+  GtkWidget *child;
+  struct hdhomerun_discover_t *ds;
+  uint32_t flags;
+  uint32_t device_types[1];
+  struct hdhomerun_discover2_device_t *device = NULL;
   
-  /* Placeholder for device discovery */
-  g_print ("Refreshing device list...\n");
+  (void)button; /* unused */
+  
+  /* Clear existing devices */
+  while ((child = gtk_widget_get_first_child (GTK_WIDGET (self->device_list))) != NULL)
+    {
+      gtk_list_box_remove (self->device_list, child);
+    }
+  
+  g_message ("Refreshing device list...");
+  
+  /* Perform device discovery using libhdhomerun */
+  ds = hdhomerun_discover_create (NULL);
+  if (!ds)
+    {
+      g_warning ("Failed to initialize device discovery");
+      return;
+    }
+  
+  flags = HDHOMERUN_DISCOVER_FLAGS_IPV4_GENERAL;
+  device_types[0] = HDHOMERUN_DEVICE_TYPE_TUNER;
+  
+  if (hdhomerun_discover2_find_devices_broadcast (ds, flags, device_types, 1) >= 0)
+    {
+      device = hdhomerun_discover2_iter_device_first (ds);
+      while (device)
+        {
+          struct hdhomerun_discover2_device_if_t *device_if;
+          struct sockaddr_storage ip_address;
+          char ip_address_str[HDHOMERUN_IP_STRING_SIZE];  /* Buffer for IPv4/IPv6 address string */
+          uint32_t device_id;
+          char device_id_str[9];    /* Buffer for 8-char hex ID plus null */
+          HdhomerunDeviceRow *row;
+          
+          device_id = hdhomerun_discover2_device_get_device_id (device);
+          g_snprintf (device_id_str, sizeof (device_id_str), "%08X", device_id);
+          
+          /* Iterate through all network interfaces for this device */
+          device_if = hdhomerun_discover2_iter_device_if_first (device);
+          while (device_if)
+            {
+              hdhomerun_discover2_device_if_get_ip_addr (device_if, &ip_address);
+              /* Convert IP address to string, FALSE omits port for display */
+              hdhomerun_sock_sockaddr_to_ip_str (ip_address_str, (struct sockaddr *)&ip_address, FALSE);
+              
+              row = hdhomerun_device_row_new (device_id_str, "HDHomeRun", ip_address_str);
+              gtk_list_box_append (self->device_list, GTK_WIDGET (row));
+              
+              g_message ("Found device: %s at %s", device_id_str, ip_address_str);
+              
+              device_if = hdhomerun_discover2_iter_device_if_next (device_if);
+            }
+          
+          device = hdhomerun_discover2_iter_device_next (device);
+        }
+    }
+  
+  hdhomerun_discover_destroy (ds);
+}
+
+static gboolean
+refresh_devices_async (gpointer user_data)
+{
+  HdhomerunWindow *self = HDHOMERUN_WINDOW (user_data);
+  
+  on_refresh_clicked (NULL, self);
+  
+  return G_SOURCE_REMOVE;
 }
 
 static void
@@ -128,4 +246,7 @@ hdhomerun_window_init (HdhomerunWindow *self)
   g_settings_bind (self->settings, "window-maximized",
                    self, "maximized",
                    G_SETTINGS_BIND_DEFAULT);
+  
+  /* Automatically discover devices on startup (async to avoid blocking UI) */
+  g_idle_add (refresh_devices_async, self);
 }
