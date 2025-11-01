@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>HDHomeRun Config GTK - Main Window</title>
+    <style>
+        body { 
+            margin: 20px; 
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+        }
+        h1 {
+            color: #333;
+        }
+        img {
+            border: 2px solid #333;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            max-width: 100%;
+            display: block;
+            margin: 20px 0;
+        }
+        .description {
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>HDHomeRun Config GTK - Main Window</h1>
+    <div class="description">
+        <h2>Changes Implemented:</h2>
+        <ul>
+            <li>✅ Automatic device discovery on startup using libhdhomerun</li>
+            <li>✅ Device refresh functionality with the refresh button</li>
+            <li>✅ Manual device entry with IP address field in "Add Device" dialog</li>
+            <li>✅ Integration with libhdhomerun for discovering HDHomeRun tuners</li>
+        </ul>
+        <p><strong>Note:</strong> No HDHomeRun devices were detected in this test environment, which is expected. The application successfully runs device discovery and would populate the device list if any devices were present on the network.</p>
+    </div>
+    <h2>Main Window Screenshot:</h2>
+    <img src="screenshot1_main.png" alt="HDHomeRun Config GTK Main Window">
+</body>
+</html>

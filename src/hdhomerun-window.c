@@ -69,7 +69,7 @@ on_add_device_response (AdwAlertDialog *dialog,
       row = hdhomerun_device_row_new (ip_address, "Manual Device", ip_address);
       gtk_list_box_append (self->device_list, GTK_WIDGET (row));
       
-      g_print ("Adding device at IP: %s\n", ip_address);
+      g_message ("Adding device at IP: %s", ip_address);
     }
 }
 
@@ -114,7 +114,7 @@ on_refresh_clicked (GtkButton *button,
       gtk_list_box_remove (self->device_list, child);
     }
   
-  g_print ("Refreshing device list...\n");
+  g_message ("Refreshing device list...");
   
 #ifdef HAVE_HDHOMERUN
   /* Perform device discovery using libhdhomerun */
@@ -134,12 +134,13 @@ on_refresh_clicked (GtkButton *button,
               if (device_if)
                 {
                   struct sockaddr_storage ip_address;
-                  char ip_address_str[64];
+                  char ip_address_str[64];  /* Buffer for IPv4/IPv6 address string */
                   uint32_t device_id;
-                  char device_id_str[16];
+                  char device_id_str[16];   /* Buffer for 8-char hex ID plus null */
                   HdhomerunDeviceRow *row;
                   
                   hdhomerun_discover2_device_if_get_ip_addr (device_if, &ip_address);
+                  /* Convert IP address to string, TRUE includes port if present */
                   hdhomerun_sock_sockaddr_to_ip_str (ip_address_str, (struct sockaddr *)&ip_address, TRUE);
                   
                   device_id = hdhomerun_discover2_device_get_device_id (device);
@@ -148,7 +149,7 @@ on_refresh_clicked (GtkButton *button,
                   row = hdhomerun_device_row_new (device_id_str, "HDHomeRun", ip_address_str);
                   gtk_list_box_append (self->device_list, GTK_WIDGET (row));
                   
-                  g_print ("Found device: %s at %s\n", device_id_str, ip_address_str);
+                  g_message ("Found device: %s at %s", device_id_str, ip_address_str);
                 }
               
               device = hdhomerun_discover2_iter_device_next (device);
@@ -158,7 +159,7 @@ on_refresh_clicked (GtkButton *button,
       hdhomerun_discover_destroy (ds);
     }
 #else
-  g_print ("libhdhomerun not available - device discovery disabled\n");
+  g_message ("libhdhomerun not available - device discovery disabled");
 #endif
 }
 
