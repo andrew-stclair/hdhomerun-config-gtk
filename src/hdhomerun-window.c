@@ -102,6 +102,10 @@ on_refresh_clicked (GtkButton *button,
                    HdhomerunWindow *self)
 {
   GtkWidget *child;
+  struct hdhomerun_discover_t *ds;
+  uint32_t flags;
+  uint32_t device_types[1];
+  struct hdhomerun_discover2_device_t *device;
   
   (void)button; /* unused */
   
@@ -114,46 +118,49 @@ on_refresh_clicked (GtkButton *button,
   g_message ("Refreshing device list...");
   
   /* Perform device discovery using libhdhomerun */
-  struct hdhomerun_discover_t *ds = hdhomerun_discover_create (NULL);
-  if (ds)
+  ds = hdhomerun_discover_create (NULL);
+  if (!ds)
     {
-      uint32_t flags = HDHOMERUN_DISCOVER_FLAGS_IPV4_GENERAL;
-      uint32_t device_types[1];
-      device_types[0] = HDHOMERUN_DEVICE_TYPE_TUNER;
-      
-      if (hdhomerun_discover2_find_devices_broadcast (ds, flags, device_types, 1) >= 0)
-        {
-          struct hdhomerun_discover2_device_t *device = hdhomerun_discover2_iter_device_first (ds);
-          while (device)
-            {
-              struct hdhomerun_discover2_device_if_t *device_if = hdhomerun_discover2_iter_device_if_first (device);
-              if (device_if)
-                {
-                  struct sockaddr_storage ip_address;
-                  char ip_address_str[64];  /* Buffer for IPv4/IPv6 address string */
-                  uint32_t device_id;
-                  char device_id_str[16];   /* Buffer for 8-char hex ID plus null */
-                  HdhomerunDeviceRow *row;
-                  
-                  hdhomerun_discover2_device_if_get_ip_addr (device_if, &ip_address);
-                  /* Convert IP address to string, TRUE includes port if present */
-                  hdhomerun_sock_sockaddr_to_ip_str (ip_address_str, (struct sockaddr *)&ip_address, TRUE);
-                  
-                  device_id = hdhomerun_discover2_device_get_device_id (device);
-                  g_snprintf (device_id_str, sizeof(device_id_str), "%08X", device_id);
-                  
-                  row = hdhomerun_device_row_new (device_id_str, "HDHomeRun", ip_address_str);
-                  gtk_list_box_append (self->device_list, GTK_WIDGET (row));
-                  
-                  g_message ("Found device: %s at %s", device_id_str, ip_address_str);
-                }
-              
-              device = hdhomerun_discover2_iter_device_next (device);
-            }
-        }
-      
-      hdhomerun_discover_destroy (ds);
+      g_warning ("Failed to initialize device discovery");
+      return;
     }
+  
+  flags = HDHOMERUN_DISCOVER_FLAGS_IPV4_GENERAL;
+  device_types[0] = HDHOMERUN_DEVICE_TYPE_TUNER;
+  
+  if (hdhomerun_discover2_find_devices_broadcast (ds, flags, device_types, 1) >= 0)
+    {
+      device = hdhomerun_discover2_iter_device_first (ds);
+      while (device)
+        {
+          struct hdhomerun_discover2_device_if_t *device_if;
+          struct sockaddr_storage ip_address;
+          char ip_address_str[64];  /* Buffer for IPv4/IPv6 address string */
+          uint32_t device_id;
+          char device_id_str[16];   /* Buffer for 8-char hex ID plus null */
+          HdhomerunDeviceRow *row;
+          
+          device_if = hdhomerun_discover2_iter_device_if_first (device);
+          if (device_if)
+            {
+              hdhomerun_discover2_device_if_get_ip_addr (device_if, &ip_address);
+              /* Convert IP address to string, FALSE omits port for display */
+              hdhomerun_sock_sockaddr_to_ip_str (ip_address_str, (struct sockaddr *)&ip_address, FALSE);
+              
+              device_id = hdhomerun_discover2_device_get_device_id (device);
+              g_snprintf (device_id_str, sizeof(device_id_str), "%08X", device_id);
+              
+              row = hdhomerun_device_row_new (device_id_str, "HDHomeRun", ip_address_str);
+              gtk_list_box_append (self->device_list, GTK_WIDGET (row));
+              
+              g_message ("Found device: %s at %s", device_id_str, ip_address_str);
+            }
+          
+          device = hdhomerun_discover2_iter_device_next (device);
+        }
+    }
+  
+  hdhomerun_discover_destroy (ds);
 }
 
 static void
