@@ -44,6 +44,8 @@ jobs:
 
         Name: libhdhomerun
         Description: HDHomeRun library
+        # The version below corresponds to the upstream libhdhomerun release version.
+        # Update this value if the bundled or required libhdhomerun version changes.
         Version: 20230719
         Libs: -L\${libdir} -lhdhomerun
         Cflags: -I\${includedir}
