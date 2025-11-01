@@ -30,3 +30,6 @@ Thumbs.db
 # Generated files
 *-config.h
 *.gresource
+
+# CodeQL
+_codeql_detected_source_root
