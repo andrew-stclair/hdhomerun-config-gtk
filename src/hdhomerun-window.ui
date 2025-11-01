@@ -58,6 +58,7 @@
                 <property name="content">
                   <object class="GtkStack">
                     <property name="transition-type">crossfade</property>
+                    <property name="visible-child-name">placeholder</property>
                     <child>
                       <object class="GtkStackPage">
                         <property name="name">placeholder</property>

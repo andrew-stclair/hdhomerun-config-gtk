@@ -81,7 +81,13 @@ on_tune_clicked (GtkButton *button,
   (void)button; /* unused */
   
   frequency = gtk_editable_get_text (GTK_EDITABLE (self->frequency_entry));
-  g_print ("Tuning to frequency: %s\n", frequency);
+  
+  /* Validate frequency input to prevent format string issues */
+  if (frequency && *frequency) {
+    g_print ("Tuning to frequency: %s\n", frequency);
+  } else {
+    g_print ("No frequency entered\n");
+  }
 }
 
 static void

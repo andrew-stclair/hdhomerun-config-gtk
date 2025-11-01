@@ -73,9 +73,23 @@ on_refresh_clicked (GtkButton *button,
 }
 
 static void
+hdhomerun_window_finalize (GObject *object)
+{
+  HdhomerunWindow *self = (HdhomerunWindow *)object;
+
+  g_clear_object (&self->settings);
+  g_list_free (self->devices);
+
+  G_OBJECT_CLASS (hdhomerun_window_parent_class)->finalize (object);
+}
+
+static void
 hdhomerun_window_class_init (HdhomerunWindowClass *klass)
 {
   GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (klass);
+  GObjectClass *object_class = G_OBJECT_CLASS (klass);
+
+  object_class->finalize = hdhomerun_window_finalize;
 
   gtk_widget_class_set_template_from_resource (widget_class, "/com/github/andrewstclair/HDHomeRunConfig/hdhomerun-window.ui");
   gtk_widget_class_bind_template_child (widget_class, HdhomerunWindow, header_bar);
