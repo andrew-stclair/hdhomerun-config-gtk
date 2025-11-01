@@ -12,12 +12,6 @@ config_h.set_quoted('PACKAGE_VERSION', meson.project_version())
 config_h.set_quoted('GETTEXT_PACKAGE', 'hdhomerun-config-gtk')
 config_h.set_quoted('LOCALEDIR', join_paths(get_option('prefix'), get_option('localedir')))
 
-# Check for optional dependencies
-hdhomerun_dep = dependency('hdhomerun', required: false)
-if hdhomerun_dep.found()
-  config_h.set('HAVE_HDHOMERUN', 1)
-endif
-
 configure_file(
   output: 'hdhomerun-config-gtk-config.h',
   configuration: config_h,

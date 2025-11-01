@@ -10,8 +10,8 @@ hdhomerun_deps = [
   dependency('gtk4', version: '>= 4.10'),
   dependency('libadwaita-1', version: '>= 1.4'),
   dependency('glib-2.0', version: '>= 2.76'),
+  dependency('hdhomerun'),
   dependency('vlc', required: false),
-  dependency('hdhomerun', required: false),
 ]
 
 hdhomerun_sources += gnome.compile_resources('hdhomerun-resources',

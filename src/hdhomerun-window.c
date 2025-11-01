@@ -22,10 +22,7 @@
 #include "hdhomerun-tuner-controls.h"
 
 #include <glib/gi18n.h>
-
-#ifdef HAVE_HDHOMERUN
 #include <libhdhomerun/hdhomerun.h>
-#endif
 
 struct _HdhomerunWindow
 {
@@ -116,7 +113,6 @@ on_refresh_clicked (GtkButton *button,
   
   g_message ("Refreshing device list...");
   
-#ifdef HAVE_HDHOMERUN
   /* Perform device discovery using libhdhomerun */
   struct hdhomerun_discover_t *ds = hdhomerun_discover_create (NULL);
   if (ds)
@@ -158,9 +154,6 @@ on_refresh_clicked (GtkButton *button,
       
       hdhomerun_discover_destroy (ds);
     }
-#else
-  g_message ("libhdhomerun not available - device discovery disabled");
-#endif
 }
 
 static void
