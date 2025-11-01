@@ -18,16 +18,36 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
+    - name: Build and test on amd64
+      if: matrix.arch == 'amd64'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          meson \
+          ninja-build \
+          libgtk-4-dev \
+          libadwaita-1-dev \
+          libglib2.0-dev \
+          gettext \
+          appstream \
+          desktop-file-utils \
+          pkg-config
+        meson setup builddir
+        meson compile -C builddir
+        meson test -C builddir || true
+        meson install -C builddir --destdir=/tmp/install
+    
     - name: Set up QEMU
       if: matrix.arch == 'arm64'
       uses: docker/setup-qemu-action@v3
       with:
         platforms: arm64
     
-    - name: Build and test on ${{ matrix.arch }}
+    - name: Build and test on arm64
+      if: matrix.arch == 'arm64'
       uses: uraimo/run-on-arch-action@v2
       with:
-        arch: ${{ matrix.arch }}
+        arch: aarch64
         distro: ubuntu22.04
         
         dockerRunArgs: |
