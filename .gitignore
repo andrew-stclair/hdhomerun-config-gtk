@@ -2,6 +2,7 @@
 build/
 builddir/
 _build/
+_codeql_build_dir/
 
 # C/C++ artifacts
 *.o
