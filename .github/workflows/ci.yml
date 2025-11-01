@@ -33,6 +33,21 @@ jobs:
           desktop-file-utils \
           pkg-config
     
+    - name: Create libhdhomerun pkg-config file
+      run: |
+        sudo tee /usr/lib/x86_64-linux-gnu/pkgconfig/hdhomerun.pc > /dev/null <<EOF
+        prefix=/usr
+        exec_prefix=\${prefix}
+        libdir=\${exec_prefix}/lib/x86_64-linux-gnu
+        includedir=\${prefix}/include/libhdhomerun
+
+        Name: libhdhomerun
+        Description: HDHomeRun library
+        Version: 20230719
+        Libs: -L\${libdir} -lhdhomerun
+        Cflags: -I\${includedir}
+        EOF
+    
     - name: Build and test
       run: |
         meson setup builddir
