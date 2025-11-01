@@ -5,6 +5,9 @@
   <project_license>GPL-2.0-only</project_license>
   <name>HDHomeRun Config</name>
   <summary>Configure and preview HDHomeRun TV tuners</summary>
+  <developer id="com.github.andrewstclair">
+    <name>Andrew St. Clair</name>
+  </developer>
   <description>
     <p>
       HDHomeRun Config is a GNOME application for configuring and previewing
@@ -22,11 +25,6 @@
       interface that works great on both desktop and mobile devices.
     </p>
   </description>
-  <screenshots>
-    <screenshot type="default">
-      <caption>Main window showing device list and tuner controls</caption>
-    </screenshot>
-  </screenshots>
   <url type="homepage">https://github.com/andrew-stclair/hdhomerun-config-gtk</url>
   <url type="bugtracker">https://github.com/andrew-stclair/hdhomerun-config-gtk/issues</url>
   <content_rating type="oars-1.1" />

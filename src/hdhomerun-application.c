@@ -75,11 +75,14 @@ hdhomerun_application_about_action (GSimpleAction *action,
   HdhomerunApplication *self = user_data;
   GtkWindow *window = NULL;
 
+  (void)action; /* unused */
+  (void)parameter; /* unused */
+
   g_assert (HDHOMERUN_IS_APPLICATION (self));
 
   window = gtk_application_get_active_window (GTK_APPLICATION (self));
 
-  adw_show_about_dialog (window,
+  adw_show_about_dialog (GTK_WIDGET (window),
                          "application-name", "HDHomeRun Config",
                          "application-icon", "com.github.andrewstclair.HDHomeRunConfig",
                          "developer-name", "Andrew St. Clair",
@@ -97,14 +100,17 @@ hdhomerun_application_quit_action (GSimpleAction *action,
 {
   HdhomerunApplication *self = user_data;
 
+  (void)action; /* unused */
+  (void)parameter; /* unused */
+
   g_assert (HDHOMERUN_IS_APPLICATION (self));
 
   g_application_quit (G_APPLICATION (self));
 }
 
 static const GActionEntry app_actions[] = {
-  { "quit", hdhomerun_application_quit_action },
-  { "about", hdhomerun_application_about_action },
+  { "quit", hdhomerun_application_quit_action, NULL, NULL, NULL },
+  { "about", hdhomerun_application_about_action, NULL, NULL, NULL },
 };
 
 static void

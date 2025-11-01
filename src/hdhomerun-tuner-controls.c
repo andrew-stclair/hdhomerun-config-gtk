@@ -42,6 +42,8 @@ static void
 on_play_clicked (GtkButton *button,
                  HdhomerunTunerControls *self)
 {
+  (void)button; /* unused */
+  
   self->playing = TRUE;
   gtk_widget_set_sensitive (GTK_WIDGET (self->play_button), FALSE);
   gtk_widget_set_sensitive (GTK_WIDGET (self->stop_button), TRUE);
@@ -52,6 +54,8 @@ static void
 on_stop_clicked (GtkButton *button,
                  HdhomerunTunerControls *self)
 {
+  (void)button; /* unused */
+  
   self->playing = FALSE;
   gtk_widget_set_sensitive (GTK_WIDGET (self->play_button), TRUE);
   gtk_widget_set_sensitive (GTK_WIDGET (self->stop_button), FALSE);
@@ -62,6 +66,9 @@ static void
 on_scan_clicked (GtkButton *button,
                  HdhomerunTunerControls *self)
 {
+  (void)button; /* unused */
+  (void)self; /* unused */
+  
   g_print ("Starting channel scan...\n");
 }
 
@@ -69,7 +76,11 @@ static void
 on_tune_clicked (GtkButton *button,
                  HdhomerunTunerControls *self)
 {
-  const char *frequency = gtk_editable_get_text (GTK_EDITABLE (self->frequency_entry));
+  const char *frequency;
+  
+  (void)button; /* unused */
+  
+  frequency = gtk_editable_get_text (GTK_EDITABLE (self->frequency_entry));
   g_print ("Tuning to frequency: %s\n", frequency);
 }
 

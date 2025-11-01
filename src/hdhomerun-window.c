@@ -47,22 +47,27 @@ static void
 on_add_device_clicked (GtkButton *button,
                        HdhomerunWindow *self)
 {
-  AdwAlertDialog *dialog;
+  AdwDialog *dialog;
+  
+  (void)button; /* unused */
   
   dialog = adw_alert_dialog_new (_("Add Device Manually"), 
                                  _("Enter the IP address of the HDHomeRun device"));
   
-  adw_alert_dialog_add_response (dialog, "cancel", _("_Cancel"));
-  adw_alert_dialog_add_response (dialog, "add", _("_Add"));
-  adw_alert_dialog_set_response_appearance (dialog, "add", ADW_RESPONSE_SUGGESTED);
+  adw_alert_dialog_add_response (ADW_ALERT_DIALOG (dialog), "cancel", _("_Cancel"));
+  adw_alert_dialog_add_response (ADW_ALERT_DIALOG (dialog), "add", _("_Add"));
+  adw_alert_dialog_set_response_appearance (ADW_ALERT_DIALOG (dialog), "add", ADW_RESPONSE_SUGGESTED);
   
-  adw_alert_dialog_present (dialog, GTK_WIDGET (self));
+  adw_dialog_present (dialog, GTK_WIDGET (self));
 }
 
 static void
 on_refresh_clicked (GtkButton *button,
                    HdhomerunWindow *self)
 {
+  (void)button; /* unused */
+  (void)self; /* unused */
+  
   /* Placeholder for device discovery */
   g_print ("Refreshing device list...\n");
 }
