@@ -45,6 +45,8 @@ jobs:
 
         Name: libhdhomerun
         Description: HDHomeRun library
+        # The version below is hardcoded to match the current libhdhomerun release.
+        # Update this value if/when the library version changes.
         Version: 20230719
         Libs: -L\${libdir} -lhdhomerun
         Cflags: -I\${includedir}
