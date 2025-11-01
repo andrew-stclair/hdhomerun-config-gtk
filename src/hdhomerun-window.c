@@ -63,6 +63,19 @@ on_add_device_response (AdwAlertDialog *dialog,
   
   if (ip_address && *ip_address)
     {
+      /* Validate IP address format */
+      if (!g_hostname_is_ip_address (ip_address))
+        {
+          AdwDialog *error_dialog;
+          
+          error_dialog = adw_alert_dialog_new (_("Invalid IP Address"),
+                                              _("Please enter a valid IPv4 or IPv6 address."));
+          adw_alert_dialog_add_response (ADW_ALERT_DIALOG (error_dialog), "ok", _("_OK"));
+          adw_alert_dialog_set_default_response (ADW_ALERT_DIALOG (error_dialog), "ok");
+          adw_dialog_present (error_dialog, GTK_WIDGET (self));
+          return;
+        }
+      
       HdhomerunDeviceRow *row;
       
       row = hdhomerun_device_row_new (ip_address, "Manual Device", ip_address);
