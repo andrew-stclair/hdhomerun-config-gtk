@@ -140,20 +140,23 @@ on_refresh_clicked (GtkButton *button,
           char device_id_str[16];   /* Buffer for 8-char hex ID plus null */
           HdhomerunDeviceRow *row;
           
+          device_id = hdhomerun_discover2_device_get_device_id (device);
+          g_snprintf (device_id_str, sizeof(device_id_str), "%08X", device_id);
+          
+          /* Iterate through all network interfaces for this device */
           device_if = hdhomerun_discover2_iter_device_if_first (device);
-          if (device_if)
+          while (device_if)
             {
               hdhomerun_discover2_device_if_get_ip_addr (device_if, &ip_address);
               /* Convert IP address to string, FALSE omits port for display */
               hdhomerun_sock_sockaddr_to_ip_str (ip_address_str, (struct sockaddr *)&ip_address, FALSE);
               
-              device_id = hdhomerun_discover2_device_get_device_id (device);
-              g_snprintf (device_id_str, sizeof(device_id_str), "%08X", device_id);
-              
               row = hdhomerun_device_row_new (device_id_str, "HDHomeRun", ip_address_str);
               gtk_list_box_append (self->device_list, GTK_WIDGET (row));
               
               g_message ("Found device: %s at %s", device_id_str, ip_address_str);
+              
+              device_if = hdhomerun_discover2_iter_device_if_next (device_if);
             }
           
           device = hdhomerun_discover2_iter_device_next (device);
