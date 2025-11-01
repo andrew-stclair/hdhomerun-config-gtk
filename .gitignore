@@ -1,0 +1,32 @@
+# Build directories
+build/
+builddir/
+_build/
+
+# C/C++ artifacts
+*.o
+*.so
+*.a
+*.dylib
+*.exe
+*.out
+*.app
+
+# Meson
+subprojects/
+.flatpak-builder/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated files
+*-config.h
+*.gresource

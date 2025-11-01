@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=HDHomeRun Config
+GenericName=TV Tuner Configuration
+Comment=Configure and preview HDHomeRun TV tuners
+Exec=hdhomerun-config-gtk
+Icon=com.github.andrewstclair.HDHomeRunConfig
+Terminal=false
+Type=Application
+Categories=GTK;AudioVideo;Video;TV;
+Keywords=hdhomerun;tv;tuner;channel;broadcast;
+StartupNotify=true

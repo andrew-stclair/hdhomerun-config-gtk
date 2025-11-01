@@ -1,0 +1,6 @@
+# List of source files containing translatable strings
+src/main.c
+src/hdhomerun-window.c
+src/hdhomerun-application.c
+data/com.github.andrewstclair.HDHomeRunConfig.desktop.in
+data/com.github.andrewstclair.HDHomeRunConfig.metainfo.xml.in

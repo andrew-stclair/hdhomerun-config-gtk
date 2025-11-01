@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.github.andrewstclair.HDHomeRunConfig</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-2.0-only</project_license>
+  <name>HDHomeRun Config</name>
+  <summary>Configure and preview HDHomeRun TV tuners</summary>
+  <description>
+    <p>
+      HDHomeRun Config is a GNOME application for configuring and previewing
+      HDHomeRun network TV tuners. It provides an intuitive interface to:
+    </p>
+    <ul>
+      <li>Automatically discover HDHomeRun devices on your network</li>
+      <li>Preview live TV from tuners</li>
+      <li>Scan for channels</li>
+      <li>Manage saved channels</li>
+      <li>Manually tune to specific frequencies</li>
+    </ul>
+    <p>
+      The application is built with GTK4 and libadwaita, providing a modern
+      interface that works great on both desktop and mobile devices.
+    </p>
+  </description>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Main window showing device list and tuner controls</caption>
+    </screenshot>
+  </screenshots>
+  <url type="homepage">https://github.com/andrew-stclair/hdhomerun-config-gtk</url>
+  <url type="bugtracker">https://github.com/andrew-stclair/hdhomerun-config-gtk/issues</url>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="0.1.0" date="2025-11-01">
+      <description>
+        <p>Initial release</p>
+      </description>
+    </release>
+  </releases>
+  <launchable type="desktop-id">com.github.andrewstclair.HDHomeRunConfig.desktop</launchable>
+  <provides>
+    <binary>hdhomerun-config-gtk</binary>
+  </provides>
+</component>

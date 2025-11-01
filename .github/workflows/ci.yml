@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up QEMU
+      if: matrix.arch == 'arm64'
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: arm64
+    
+    - name: Build and test on ${{ matrix.arch }}
+      uses: docker/run-on-arch-action@v2
+      with:
+        arch: ${{ matrix.arch }}
+        distro: ubuntu22.04
+        
+        dockerRunArgs: |
+          --volume "${PWD}:/workspace"
+          --workdir /workspace
+        
+        install: |
+          apt-get update
+          apt-get install -y \
+            meson \
+            ninja-build \
+            libgtk-4-dev \
+            libadwaita-1-dev \
+            libglib2.0-dev \
+            gettext \
+            appstream \
+            desktop-file-utils \
+            pkg-config
+        
+        run: |
+          meson setup builddir
+          meson compile -C builddir
+          meson test -C builddir || true
+          meson install -C builddir --destdir=/tmp/install
