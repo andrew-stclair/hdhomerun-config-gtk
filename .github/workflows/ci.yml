@@ -52,3 +52,16 @@ jobs:
           meson compile -C builddir
           meson test -C builddir || true
           meson install -C builddir --destdir=/tmp/install
+    
+    - name: Copy build artifacts
+      run: |
+        mkdir -p artifacts
+        cp builddir/src/hdhomerun-config-gtk artifacts/ || true
+        cp -r /tmp/install artifacts/install || true
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: hdhomerun-config-gtk-${{ matrix.arch }}
+        path: artifacts/
+        retention-days: 7
