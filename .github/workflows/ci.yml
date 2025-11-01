@@ -35,10 +35,12 @@ jobs:
     
     - name: Create libhdhomerun pkg-config file
       run: |
-        sudo tee /usr/lib/x86_64-linux-gnu/pkgconfig/hdhomerun.pc > /dev/null <<EOF
+        # Detect multiarch triplet
+        MULTIARCH=$(dpkg-architecture -qDEB_HOST_MULTIARCH)
+        sudo tee /usr/lib/${MULTIARCH}/pkgconfig/hdhomerun.pc > /dev/null <<EOF
         prefix=/usr
         exec_prefix=\${prefix}
-        libdir=\${exec_prefix}/lib/x86_64-linux-gnu
+        libdir=\${exec_prefix}/lib/${MULTIARCH}
         includedir=\${prefix}/include/libhdhomerun
 
         Name: libhdhomerun
