@@ -24,6 +24,8 @@
 #include <glib/gi18n.h>
 #include <libhdhomerun/hdhomerun.h>
 
+#define HDHOMERUN_IP_STRING_SIZE 64  /* Size required by libhdhomerun API */
+
 struct _HdhomerunWindow
 {
   AdwApplicationWindow parent_instance;
@@ -105,7 +107,7 @@ on_refresh_clicked (GtkButton *button,
   struct hdhomerun_discover_t *ds;
   uint32_t flags;
   uint32_t device_types[1];
-  struct hdhomerun_discover2_device_t *device;
+  struct hdhomerun_discover2_device_t *device = NULL;
   
   (void)button; /* unused */
   
@@ -135,7 +137,7 @@ on_refresh_clicked (GtkButton *button,
         {
           struct hdhomerun_discover2_device_if_t *device_if;
           struct sockaddr_storage ip_address;
-          char ip_address_str[64];  /* Buffer for IPv4/IPv6 address string */
+          char ip_address_str[HDHOMERUN_IP_STRING_SIZE];  /* Buffer for IPv4/IPv6 address string */
           uint32_t device_id;
           char device_id_str[9];    /* Buffer for 8-char hex ID plus null */
           HdhomerunDeviceRow *row;
@@ -171,7 +173,7 @@ refresh_devices_async (gpointer user_data)
 {
   HdhomerunWindow *self = HDHOMERUN_WINDOW (user_data);
   
-  on_refresh_clicked (self->refresh_button, self);
+  on_refresh_clicked (NULL, self);
   
   return G_SOURCE_REMOVE;
 }
