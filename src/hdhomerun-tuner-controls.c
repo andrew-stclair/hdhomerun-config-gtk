@@ -72,6 +72,21 @@ on_scan_clicked (GtkButton *button,
   g_print ("Starting channel scan...\n");
 }
 
+static gboolean
+is_valid_frequency_string (const char *str)
+{
+  if (!str || !*str)
+    return FALSE;
+  
+  /* Check that the string contains only digits, decimal point, and whitespace */
+  for (const char *p = str; *p; p++) {
+    if (!g_ascii_isdigit (*p) && *p != '.' && *p != ' ')
+      return FALSE;
+  }
+  
+  return TRUE;
+}
+
 static void
 on_tune_clicked (GtkButton *button,
                  HdhomerunTunerControls *self)
@@ -83,10 +98,10 @@ on_tune_clicked (GtkButton *button,
   frequency = gtk_editable_get_text (GTK_EDITABLE (self->frequency_entry));
   
   /* Validate frequency input to prevent format string issues */
-  if (frequency && *frequency) {
+  if (is_valid_frequency_string (frequency)) {
     g_print ("Tuning to frequency: %s\n", frequency);
   } else {
-    g_print ("No frequency entered\n");
+    g_print ("Invalid or empty frequency entered\n");
   }
 }
 
