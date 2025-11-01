@@ -31,6 +31,7 @@ struct _HdhomerunWindow
   AdwHeaderBar *header_bar;
   AdwNavigationSplitView *split_view;
   GtkListBox *device_list;
+  GtkStack *content_stack;
   AdwStatusPage *placeholder_page;
   HdhomerunTunerControls *tuner_controls;
   GtkButton *add_device_button;
@@ -91,10 +92,14 @@ hdhomerun_window_class_init (HdhomerunWindowClass *klass)
 
   object_class->finalize = hdhomerun_window_finalize;
 
+  /* Ensure HdhomerunTunerControls type is registered before loading the template */
+  g_type_ensure (HDHOMERUN_TYPE_TUNER_CONTROLS);
+
   gtk_widget_class_set_template_from_resource (widget_class, "/com/github/andrewstclair/HDHomeRunConfig/hdhomerun-window.ui");
   gtk_widget_class_bind_template_child (widget_class, HdhomerunWindow, header_bar);
   gtk_widget_class_bind_template_child (widget_class, HdhomerunWindow, split_view);
   gtk_widget_class_bind_template_child (widget_class, HdhomerunWindow, device_list);
+  gtk_widget_class_bind_template_child (widget_class, HdhomerunWindow, content_stack);
   gtk_widget_class_bind_template_child (widget_class, HdhomerunWindow, placeholder_page);
   gtk_widget_class_bind_template_child (widget_class, HdhomerunWindow, tuner_controls);
   gtk_widget_class_bind_template_child (widget_class, HdhomerunWindow, add_device_button);
@@ -109,6 +114,9 @@ hdhomerun_window_init (HdhomerunWindow *self)
   gtk_widget_init_template (GTK_WIDGET (self));
 
   self->settings = g_settings_new ("com.github.andrewstclair.HDHomeRunConfig");
+  
+  /* Set initial visible child for the content stack */
+  gtk_stack_set_visible_child_name (self->content_stack, "placeholder");
   
   /* Restore window state */
   g_settings_bind (self->settings, "window-width",
