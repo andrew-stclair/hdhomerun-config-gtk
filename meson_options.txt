@@ -1,0 +1,2 @@
+# Meson build options
+# These options can be set with -Doption=value when running meson setup

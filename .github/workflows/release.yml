@@ -1,0 +1,81 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up QEMU
+      if: matrix.arch == 'arm64'
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: arm64
+    
+    - name: Build on ${{ matrix.arch }}
+      uses: docker/run-on-arch-action@v2
+      with:
+        arch: ${{ matrix.arch }}
+        distro: ubuntu22.04
+        
+        dockerRunArgs: |
+          --volume "${PWD}:/workspace"
+          --workdir /workspace
+        
+        install: |
+          apt-get update
+          apt-get install -y \
+            meson \
+            ninja-build \
+            libgtk-4-dev \
+            libadwaita-1-dev \
+            libglib2.0-dev \
+            gettext \
+            appstream \
+            desktop-file-utils \
+            pkg-config
+        
+        run: |
+          meson setup builddir -Dprefix=/usr
+          meson compile -C builddir
+          meson dist -C builddir --no-tests
+    
+    - name: Rename artifact
+      run: |
+        mkdir -p artifacts
+        cp builddir/meson-dist/*.tar.xz artifacts/hdhomerun-config-gtk-${{ github.ref_name }}-${{ matrix.arch }}.tar.xz
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: hdhomerun-config-gtk-${{ matrix.arch }}
+        path: artifacts/*.tar.xz
+  
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: artifacts/**/*.tar.xz
+        generate_release_notes: true

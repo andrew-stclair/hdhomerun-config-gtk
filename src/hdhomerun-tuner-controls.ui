@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="HdhomerunTunerControls" parent="GtkBox">
+    <property name="orientation">vertical</property>
+    <property name="spacing">12</property>
+    <property name="margin-start">12</property>
+    <property name="margin-end">12</property>
+    <property name="margin-top">12</property>
+    <property name="margin-bottom">12</property>
+    
+    <!-- Video Preview Area -->
+    <child>
+      <object class="GtkFrame">
+        <property name="vexpand">true</property>
+        <child>
+          <object class="GtkBox">
+            <property name="orientation">vertical</property>
+            <property name="valign">center</property>
+            <property name="halign">center</property>
+            <property name="spacing">12</property>
+            <child>
+              <object class="GtkDrawingArea" id="video_preview">
+                <property name="content-width">640</property>
+                <property name="content-height">360</property>
+                <property name="hexpand">true</property>
+                <property name="vexpand">true</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel">
+                <property name="label" translatable="yes">Video preview will appear here</property>
+                <style>
+                  <class name="dim-label"/>
+                </style>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+    
+    <!-- Playback Controls -->
+    <child>
+      <object class="GtkBox">
+        <property name="orientation">horizontal</property>
+        <property name="spacing">6</property>
+        <property name="halign">center</property>
+        <child>
+          <object class="GtkButton" id="play_button">
+            <property name="icon-name">media-playback-start-symbolic</property>
+            <property name="tooltip-text" translatable="yes">Start Preview</property>
+            <signal name="clicked" handler="on_play_clicked" swapped="no"/>
+            <style>
+              <class name="suggested-action"/>
+              <class name="circular"/>
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="stop_button">
+            <property name="icon-name">media-playback-stop-symbolic</property>
+            <property name="tooltip-text" translatable="yes">Stop Preview</property>
+            <signal name="clicked" handler="on_stop_clicked" swapped="no"/>
+            <style>
+              <class name="destructive-action"/>
+              <class name="circular"/>
+            </style>
+          </object>
+        </child>
+      </object>
+    </child>
+    
+    <!-- Channel Selection -->
+    <child>
+      <object class="AdwPreferencesGroup">
+        <property name="title" translatable="yes">Channel Selection</property>
+        <child>
+          <object class="AdwActionRow">
+            <property name="title" translatable="yes">Saved Channel</property>
+            <child>
+              <object class="GtkDropDown" id="channel_dropdown">
+                <property name="valign">center</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="AdwActionRow">
+            <property name="title" translatable="yes">Manual Frequency</property>
+            <child>
+              <object class="GtkBox">
+                <property name="spacing">6</property>
+                <child>
+                  <object class="GtkEntry" id="frequency_entry">
+                    <property name="placeholder-text" translatable="yes">Enter frequency</property>
+                    <property name="width-chars">15</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="tune_button">
+                    <property name="label" translatable="yes">Tune</property>
+                    <signal name="clicked" handler="on_tune_clicked" swapped="no"/>
+                    <style>
+                      <class name="suggested-action"/>
+                    </style>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="AdwActionRow">
+            <property name="title" translatable="yes">Channel Scan</property>
+            <property name="subtitle" translatable="yes">Search for available channels</property>
+            <child>
+              <object class="GtkButton" id="scan_button">
+                <property name="label" translatable="yes">Start Scan</property>
+                <property name="valign">center</property>
+                <signal name="clicked" handler="on_scan_clicked" swapped="no"/>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>
