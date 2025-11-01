@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.arch == 'amd64' && 'ubuntu-24.04' || 'ubuntu-24.04-arm' }}
     permissions:
       contents: write
     strategy:
@@ -17,8 +17,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Build on amd64
-      if: matrix.arch == 'amd64'
+    - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y \
@@ -31,44 +30,12 @@ jobs:
           appstream \
           desktop-file-utils \
           pkg-config
+    
+    - name: Build
+      run: |
         meson setup builddir -Dprefix=/usr
         meson compile -C builddir
         meson dist -C builddir --no-tests
-    
-    - name: Set up QEMU
-      if: matrix.arch == 'arm64'
-      uses: docker/setup-qemu-action@v3
-      with:
-        platforms: arm64
-    
-    - name: Build on arm64
-      if: matrix.arch == 'arm64'
-      uses: uraimo/run-on-arch-action@v2
-      with:
-        arch: aarch64
-        distro: ubuntu22.04
-        
-        dockerRunArgs: |
-          --volume "${PWD}:/workspace"
-          --workdir /workspace
-        
-        install: |
-          apt-get update
-          apt-get install -y \
-            meson \
-            ninja-build \
-            libgtk-4-dev \
-            libadwaita-1-dev \
-            libglib2.0-dev \
-            gettext \
-            appstream \
-            desktop-file-utils \
-            pkg-config
-        
-        run: |
-          meson setup builddir -Dprefix=/usr
-          meson compile -C builddir
-          meson dist -C builddir --no-tests
     
     - name: Rename artifact
       run: |
