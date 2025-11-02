@@ -19,6 +19,7 @@
 #include "hdhomerun-config-gtk-config.h"
 #include "hdhomerun-window.h"
 #include "hdhomerun-device-row.h"
+#include "hdhomerun-tuner-row.h"
 #include "hdhomerun-tuner-controls.h"
 
 #include <glib/gi18n.h>
@@ -46,6 +47,9 @@ struct _HdhomerunWindow
 };
 
 G_DEFINE_FINAL_TYPE (HdhomerunWindow, hdhomerun_window, ADW_TYPE_APPLICATION_WINDOW)
+
+/* Forward declarations */
+static void on_tuner_row_activated (AdwActionRow *action_row, HdhomerunWindow *self);
 
 static void
 on_add_device_response (AdwAlertDialog *dialog,
@@ -153,23 +157,38 @@ on_refresh_clicked (GtkButton *button,
           char ip_address_str[HDHOMERUN_IP_STRING_SIZE];  /* Buffer for IPv4/IPv6 address string */
           uint32_t device_id;
           char device_id_str[9];    /* Buffer for 8-char hex ID plus null */
-          HdhomerunDeviceRow *row;
+          uint8_t tuner_count;
           
           device_id = hdhomerun_discover2_device_get_device_id (device);
           g_snprintf (device_id_str, sizeof (device_id_str), "%08X", device_id);
+          
+          /* Get the number of tuners on this device */
+          tuner_count = hdhomerun_discover2_device_get_tuner_count (device);
           
           /* Iterate through all network interfaces for this device */
           device_if = hdhomerun_discover2_iter_device_if_first (device);
           while (device_if)
             {
+              HdhomerunTunerRow *tuner_row;
+              
               hdhomerun_discover2_device_if_get_ip_addr (device_if, &ip_address);
               /* Convert IP address to string, FALSE omits port for display */
               hdhomerun_sock_sockaddr_to_ip_str (ip_address_str, (struct sockaddr *)&ip_address, FALSE);
               
-              row = hdhomerun_device_row_new (device_id_str, "HDHomeRun", ip_address_str);
-              gtk_list_box_append (self->device_list, GTK_WIDGET (row));
-              
               g_message ("Found device: %s at %s", device_id_str, ip_address_str);
+              g_message ("Device has %u tuner(s)", tuner_count);
+              
+              /* Add tuner rows directly to the device list */
+              for (guint i = 0; i < tuner_count; i++)
+                {
+                  tuner_row = hdhomerun_tuner_row_new (device_id_str, i);
+                  gtk_list_box_append (self->device_list, GTK_WIDGET (tuner_row));
+                  
+                  /* Connect the activated signal for this tuner row */
+                  g_signal_connect (tuner_row, "activated", G_CALLBACK (on_tuner_row_activated), self);
+                  
+                  g_message ("Added tuner %u to device %s", i, device_id_str);
+                }
               
               device_if = hdhomerun_discover2_iter_device_if_next (device_if);
             }
@@ -179,6 +198,31 @@ on_refresh_clicked (GtkButton *button,
     }
   
   hdhomerun_discover_destroy (ds);
+}
+
+static void
+on_tuner_row_activated (AdwActionRow *action_row,
+                        HdhomerunWindow *self)
+{
+  HdhomerunTunerRow *tuner_row = HDHOMERUN_TUNER_ROW (action_row);
+  char *device_id;
+  guint tuner_index;
+  
+  /* Get the tuner information */
+  g_object_get (tuner_row,
+                "device-id", &device_id,
+                "tuner-index", &tuner_index,
+                NULL);
+  
+  g_message ("Selected tuner %u on device %s", tuner_index, device_id);
+  
+  /* Switch to the tuner controls view */
+  gtk_stack_set_visible_child_name (self->content_stack, "tuner");
+  
+  /* Show the split view content on mobile */
+  adw_navigation_split_view_set_show_content (self->split_view, TRUE);
+  
+  g_free (device_id);
 }
 
 static gboolean
