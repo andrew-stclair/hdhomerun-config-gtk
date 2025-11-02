@@ -9,13 +9,14 @@ hdhomerun_sources = [
 
 cc = meson.get_compiler('c')
 hdhomerun_dep = cc.find_library('hdhomerun', required: true)
+vlc_dep = cc.find_library('vlc', required: true)
 
 hdhomerun_deps = [
   dependency('gtk4', version: '>= 4.10'),
   dependency('libadwaita-1', version: '>= 1.4'),
   dependency('glib-2.0', version: '>= 2.76'),
   hdhomerun_dep,
-  dependency('libvlc', required: true),
+  vlc_dep,
 ]
 
 hdhomerun_sources += gnome.compile_resources('hdhomerun-resources',
