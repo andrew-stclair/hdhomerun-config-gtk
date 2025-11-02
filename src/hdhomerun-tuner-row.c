@@ -138,5 +138,5 @@ hdhomerun_tuner_row_class_init (HdhomerunTunerRowClass *klass)
 static void
 hdhomerun_tuner_row_init (HdhomerunTunerRow *self)
 {
-  (void)self; /* unused */
+  (void)self;
 }
