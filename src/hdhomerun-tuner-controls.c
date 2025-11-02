@@ -274,6 +274,7 @@ vlc_imem_open (void *opaque, void **datap, uint64_t *sizep)
   (void)opaque;
   (void)datap;
   (void)sizep;
+  g_message ("VLC imem: open callback called");
   return 0;
 }
 
@@ -281,11 +282,19 @@ static ssize_t
 vlc_imem_read (void *opaque, unsigned char *buf, size_t len)
 {
   HdhomerunTunerControls *self = (HdhomerunTunerControls *)opaque;
+  ssize_t bytes_read;
   
-  if (!self->stream_buffer || !self->playing)
+  if (!self->stream_buffer || !self->playing) {
+    g_debug ("VLC imem: read callback - not playing or no buffer");
     return 0;
+  }
   
-  return stream_buffer_read (self->stream_buffer, buf, len);
+  bytes_read = stream_buffer_read (self->stream_buffer, buf, len);
+  if (bytes_read > 0) {
+    g_debug ("VLC imem: read %zd bytes (requested %zu)", bytes_read, len);
+  }
+  
+  return bytes_read;
 }
 
 static int
@@ -294,6 +303,7 @@ vlc_imem_seek (void *opaque, uint64_t offset)
   (void)opaque;
   (void)offset;
   /* Seeking not supported for live streams */
+  g_debug ("VLC imem: seek callback called (not supported for live streams)");
   return -1;
 }
 
@@ -301,6 +311,7 @@ static void
 vlc_imem_close (void *opaque)
 {
   (void)opaque;
+  g_message ("VLC imem: close callback called");
 }
 
 /* Timeout callback to receive stream data */
@@ -311,8 +322,11 @@ stream_recv_timeout (gpointer user_data)
   size_t actual_size;
   uint8_t *data;
   
-  if (!self->playing || !self->hd_device || !self->stream_buffer)
+  if (!self->playing || !self->hd_device || !self->stream_buffer) {
+    g_message ("Stream receive timeout: stopping (playing=%d, hd_device=%p, stream_buffer=%p)",
+               self->playing, (void*)self->hd_device, (void*)self->stream_buffer);
     return G_SOURCE_REMOVE;
+  }
   
   /* Receive data from HDHomeRun device */
   data = hdhomerun_device_stream_recv (self->hd_device, 
@@ -321,9 +335,12 @@ stream_recv_timeout (gpointer user_data)
   
   if (data && actual_size > 0) {
     gsize written = stream_buffer_write (self->stream_buffer, data, actual_size);
+    g_debug ("Stream receive: got %zu bytes, wrote %zu bytes to buffer", actual_size, written);
     if (written < actual_size) {
-      g_debug ("Stream buffer full, dropped %zu bytes", actual_size - written);
+      g_warning ("Stream buffer full, dropped %zu bytes", actual_size - written);
     }
+  } else {
+    g_debug ("Stream receive: no data received (data=%p, size=%zu)", (void*)data, actual_size);
   }
   
   return G_SOURCE_CONTINUE;
@@ -336,28 +353,34 @@ stop_channel_scan (HdhomerunTunerControls *self)
   if (!self->scan_state)
     return;
   
-  g_message ("Stopping channel scan");
+  g_message ("Stopping channel scan for device %s tuner %u",
+             self->device_id ? self->device_id : "unknown",
+             self->tuner_index);
   
   self->scan_state->scanning = FALSE;
   
   if (self->scan_state->scan_timeout_id > 0) {
+    g_message ("Removing scan timeout (ID: %u)", self->scan_state->scan_timeout_id);
     g_source_remove (self->scan_state->scan_timeout_id);
     self->scan_state->scan_timeout_id = 0;
   }
   
   if (self->scan_state->scan_dialog) {
+    g_message ("Closing scan dialog");
     adw_dialog_close (self->scan_state->scan_dialog);
     self->scan_state->scan_dialog = NULL;
   }
   
   /* Re-enable scan button */
   gtk_widget_set_sensitive (GTK_WIDGET (self->scan_button), TRUE);
+  g_message ("Re-enabled scan button");
 }
 
 static void
 on_scan_cancel_clicked (GtkButton *button, HdhomerunTunerControls *self)
 {
   (void)button;
+  g_message ("Scan cancel button clicked");
   stop_channel_scan (self);
 }
 
@@ -368,30 +391,39 @@ scan_advance_timeout (gpointer user_data)
   struct hdhomerun_channelscan_result_t result;
   int ret;
   
-  if (!self->scan_state || !self->scan_state->scanning)
+  if (!self->scan_state || !self->scan_state->scanning) {
+    g_message ("Scan advance: stopping (scan_state=%p, scanning=%d)",
+               (void*)self->scan_state,
+               self->scan_state ? self->scan_state->scanning : 0);
     return G_SOURCE_REMOVE;
+  }
+  
+  g_debug ("Scan advance: calling hdhomerun_device_channelscan_advance");
   
   /* Advance to next channel */
   ret = hdhomerun_device_channelscan_advance (self->hd_device, &result);
   
   if (ret <= 0) {
     /* Scan complete or error */
-    g_message ("Channel scan complete: found %u channels", 
-               g_list_length (self->scan_state->found_channels));
+    g_message ("Channel scan complete: found %u channels (ret=%d)", 
+               g_list_length (self->scan_state->found_channels), ret);
     
     if (self->scan_state->scan_status_label) {
       char *status_text = g_strdup_printf ("Scan complete! Found %u channel(s)", 
                                             g_list_length (self->scan_state->found_channels));
       gtk_label_set_label (self->scan_state->scan_status_label, status_text);
+      g_message ("Updated scan status: %s", status_text);
       g_free (status_text);
     }
     
     if (self->scan_state->scan_progress_bar) {
       gtk_progress_bar_set_fraction (self->scan_state->scan_progress_bar, 1.0);
+      g_message ("Set progress bar to 100%%");
     }
     
     if (self->scan_state->scan_cancel_button) {
       gtk_button_set_label (self->scan_state->scan_cancel_button, "Close");
+      g_message ("Changed cancel button to Close");
     }
     
     self->scan_state->scanning = FALSE;
@@ -399,8 +431,10 @@ scan_advance_timeout (gpointer user_data)
     
     /* Re-enable scan button */
     gtk_widget_set_sensitive (GTK_WIDGET (self->scan_button), TRUE);
+    g_message ("Re-enabled scan button");
     
     /* Populate saved channels dropdown from scan results */
+    g_message ("Populating saved channels from scan results");
     populate_saved_channels (self);
     
     return G_SOURCE_REMOVE;
@@ -409,6 +443,11 @@ scan_advance_timeout (gpointer user_data)
   /* Update progress */
   self->scan_state->current_frequency = result.frequency;
   self->scan_state->channels_scanned++;
+  
+  g_debug ("Scan advance: frequency=%u, scanned=%u/%u",
+           result.frequency,
+           self->scan_state->channels_scanned,
+           self->scan_state->channels_total);
   
   if (self->scan_state->scan_status_label) {
     char *status_text = g_strdup_printf ("Scanning frequency %u MHz...", 
@@ -423,7 +462,9 @@ scan_advance_timeout (gpointer user_data)
   }
   
   /* Detect programs on this channel */
+  g_debug ("Scan advance: calling hdhomerun_device_channelscan_detect");
   ret = hdhomerun_device_channelscan_detect (self->hd_device, &result);
+  g_debug ("Scan detect: returned %d, program_count=%u", ret, result.program_count);
   
   if (ret > 0 && result.program_count > 0) {
     g_message ("Found %u program(s) on frequency %u (channel %s)", 
@@ -435,6 +476,7 @@ scan_advance_timeout (gpointer user_data)
                                                      result.program_count,
                                                      NULL);
     self->scan_state->found_channels = g_list_append (self->scan_state->found_channels, channel);
+    g_message ("Added channel %s to found_channels list", result.channel_str);
     
     /* Update status to show found channel */
     if (self->scan_state->scan_status_label) {
@@ -448,6 +490,7 @@ scan_advance_timeout (gpointer user_data)
   }
   
   /* Continue scanning - call again immediately */
+  g_debug ("Scan advance: scheduling next iteration");
   g_idle_add (scan_advance_timeout, self);
   return G_SOURCE_REMOVE;
 }
@@ -510,6 +553,7 @@ on_play_clicked (GtkButton *button,
     ":no-audio"
   };
   
+  g_message ("Creating VLC media with imem callbacks");
   self->vlc_media = libvlc_media_new_callbacks (self->vlc_instance,
                                                  vlc_imem_open,
                                                  vlc_imem_read,
@@ -524,14 +568,17 @@ on_play_clicked (GtkButton *button,
   }
   
   /* Add media options for TS demux */
+  g_message ("Adding media options: demux=ts, no-audio");
   for (size_t i = 0; i < sizeof(media_options) / sizeof(media_options[0]); i++) {
     libvlc_media_add_option (self->vlc_media, media_options[i]);
+    g_message ("Added media option: %s", media_options[i]);
   }
   
   g_message ("VLC media created with imem callbacks and TS demux options");
   
   /* Create VLC media player if not already done */
   if (!self->vlc_player) {
+    g_message ("Creating VLC media player");
     self->vlc_player = libvlc_media_player_new (self->vlc_instance);
     if (!self->vlc_player) {
       g_warning ("Failed to create VLC media player");
@@ -544,9 +591,11 @@ on_play_clicked (GtkButton *button,
   }
   
   /* Set the media to the player */
+  g_message ("Setting media to player");
   libvlc_media_player_set_media (self->vlc_player, self->vlc_media);
   
   /* Set up video output to the GtkDrawingArea - X11 only for now */
+  g_message ("Setting up video output");
   GtkNative *native = gtk_widget_get_native (GTK_WIDGET (self->video_preview));
   if (native) {
     GdkSurface *surface = gtk_native_get_surface (native);
@@ -556,12 +605,21 @@ on_play_clicked (GtkButton *button,
         Window x_window = GDK_SURFACE_XID (surface);
         libvlc_media_player_set_xwindow (self->vlc_player, x_window);
         g_message ("Set VLC X11 window: %lu", (unsigned long)x_window);
+      } else {
+        g_warning ("Surface is not X11, VLC output may not work");
       }
+#else
+      g_warning ("X11 support not compiled, VLC output may not work");
 #endif
+    } else {
+      g_warning ("Failed to get GdkSurface from native");
     }
+  } else {
+    g_warning ("Failed to get GtkNative from video preview widget");
   }
   
   /* Mark as playing before starting playback */
+  g_message ("Marking as playing and starting stream receive timeout");
   self->playing = TRUE;
   
   /* Start the timeout to receive stream data (every 50ms) */
@@ -569,9 +627,10 @@ on_play_clicked (GtkButton *button,
   g_message ("Started stream receive timeout (ID: %u)", self->stream_timeout_id);
   
   /* Play the media */
+  g_message ("Calling libvlc_media_player_play");
   ret = libvlc_media_player_play (self->vlc_player);
   if (ret < 0) {
-    g_warning ("Failed to start VLC playback");
+    g_warning ("Failed to start VLC playback (ret=%d)", ret);
     self->playing = FALSE;
     if (self->stream_timeout_id > 0) {
       g_source_remove (self->stream_timeout_id);
@@ -581,8 +640,9 @@ on_play_clicked (GtkButton *button,
     return;
   }
   
-  g_message ("VLC playback started with UDP streaming");
+  g_message ("VLC playback started successfully with UDP streaming");
   
+  g_message ("Updating UI: disabling play button, enabling stop button");
   gtk_widget_set_sensitive (GTK_WIDGET (self->play_button), FALSE);
   gtk_widget_set_sensitive (GTK_WIDGET (self->stop_button), TRUE);
 }
@@ -604,9 +664,11 @@ on_stop_clicked (GtkButton *button,
   
   /* Mark as not playing */
   self->playing = FALSE;
+  g_message ("Marked as not playing");
   
   /* Remove the timeout */
   if (self->stream_timeout_id > 0) {
+    g_message ("Removing stream receive timeout (ID: %u)", self->stream_timeout_id);
     g_source_remove (self->stream_timeout_id);
     self->stream_timeout_id = 0;
     g_message ("Removed stream receive timeout");
@@ -614,17 +676,21 @@ on_stop_clicked (GtkButton *button,
   
   /* Stop VLC playback */
   if (self->vlc_player) {
+    g_message ("Stopping VLC playback");
     libvlc_media_player_stop (self->vlc_player);
     g_message ("VLC playback stopped");
   }
   
   /* Release VLC media */
   if (self->vlc_media) {
+    g_message ("Releasing VLC media");
     libvlc_media_release (self->vlc_media);
     self->vlc_media = NULL;
+    g_message ("VLC media released");
   }
   
   /* Stop streaming from the device and flush buffer */
+  g_message ("Flushing and stopping HDHomeRun device stream");
   hdhomerun_device_stream_flush (self->hd_device);
   hdhomerun_device_stream_stop (self->hd_device);
   
@@ -632,6 +698,7 @@ on_stop_clicked (GtkButton *button,
              self->device_id ? self->device_id : "unknown", 
              self->tuner_index);
   
+  g_message ("Updating UI: enabling play button, disabling stop button");
   gtk_widget_set_sensitive (GTK_WIDGET (self->play_button), TRUE);
   gtk_widget_set_sensitive (GTK_WIDGET (self->stop_button), FALSE);
 }
@@ -665,10 +732,12 @@ on_scan_clicked (GtkButton *button,
   
   /* Initialize scan state if needed */
   if (!self->scan_state) {
+    g_message ("Creating new scan state");
     self->scan_state = scan_state_new ();
   }
   
   /* Clear any previous scan results */
+  g_message ("Clearing previous scan results");
   g_list_free_full (self->scan_state->found_channels, (GDestroyNotify)scanned_channel_free);
   self->scan_state->found_channels = NULL;
   self->scan_state->channels_scanned = 0;
@@ -676,18 +745,21 @@ on_scan_clicked (GtkButton *button,
   /* Initialize channel scan with "us-bcast" channelmap
    * TODO: Make channelmap configurable for international support
    * Common options: us-bcast, us-cable, eu-bcast, au-bcast, etc. */
+  g_message ("Initializing channel scan with channelmap 'us-bcast'");
   ret = hdhomerun_device_channelscan_init (self->hd_device, "us-bcast");
   if (ret < 0) {
-    g_warning ("Failed to initialize channel scan for device %s tuner %u", 
+    g_warning ("Failed to initialize channel scan for device %s tuner %u (ret=%d)", 
                self->device_id ? self->device_id : "unknown", 
-               self->tuner_index);
+               self->tuner_index, ret);
     return;
   }
   
   /* Estimate total channels to scan (US broadcast is typically 69 channels) */
   self->scan_state->channels_total = 69;
+  g_message ("Estimated %u total channels to scan", self->scan_state->channels_total);
   
   /* Create scan progress dialog */
+  g_message ("Creating scan progress dialog");
   AdwDialog *dialog = adw_dialog_new ();
   adw_dialog_set_title (dialog, "Channel Scan");
   
@@ -717,6 +789,7 @@ on_scan_clicked (GtkButton *button,
   gtk_box_append (GTK_BOX (content_box), cancel_button);
   
   adw_dialog_set_child (dialog, content_box);
+  g_message ("Scan dialog UI created");
   
   /* Store dialog and widgets in scan state */
   self->scan_state->scan_dialog = dialog;
@@ -724,11 +797,16 @@ on_scan_clicked (GtkButton *button,
   self->scan_state->scan_progress_bar = GTK_PROGRESS_BAR (progress_bar);
   self->scan_state->scan_cancel_button = GTK_BUTTON (cancel_button);
   self->scan_state->scanning = TRUE;
+  g_message ("Stored dialog references in scan state");
   
   /* Present the dialog */
+  g_message ("Presenting scan dialog");
   GtkWidget *root = gtk_widget_get_ancestor (GTK_WIDGET (self), ADW_TYPE_APPLICATION_WINDOW);
   if (root) {
     adw_dialog_present (dialog, GTK_WIDGET (root));
+    g_message ("Dialog presented");
+  } else {
+    g_warning ("Failed to find root window for dialog");
   }
   
   g_message ("Successfully started channel scan for device %s tuner %u", 
@@ -737,9 +815,12 @@ on_scan_clicked (GtkButton *button,
   
   /* Disable scan button while scanning */
   gtk_widget_set_sensitive (GTK_WIDGET (self->scan_button), FALSE);
+  g_message ("Disabled scan button while scanning");
   
   /* Start the scan loop - call once to begin, it will reschedule itself */
+  g_message ("Starting scan loop with g_idle_add");
   self->scan_state->scan_timeout_id = g_idle_add (scan_advance_timeout, self);
+  g_message ("Scan loop started with ID: %u", self->scan_state->scan_timeout_id);
 }
 
 static gboolean
@@ -766,22 +847,32 @@ populate_saved_channels (HdhomerunTunerControls *self)
   
   g_return_if_fail (HDHOMERUN_IS_TUNER_CONTROLS (self));
   
+  g_message ("Populating saved channels dropdown");
+  
   /* Clear existing saved channels */
+  g_message ("Clearing existing saved channels list");
   g_list_free_full (self->saved_channels, (GDestroyNotify)saved_channel_free);
   self->saved_channels = NULL;
   
   /* Clear dropdown */
   if (self->channel_list) {
+    g_message ("Clearing existing channel dropdown list");
     g_object_unref (self->channel_list);
   }
   self->channel_list = gtk_string_list_new (NULL);
   
   /* If we have scan results, populate from them */
   if (self->scan_state && self->scan_state->found_channels) {
+    guint channel_count = g_list_length (self->scan_state->found_channels);
+    g_message ("Populating from %u scanned channels", channel_count);
+    
     for (iter = self->scan_state->found_channels; iter != NULL; iter = iter->next) {
       ScannedChannel *scanned = (ScannedChannel *)iter->data;
       SavedChannel *saved;
       char *display_name;
+      
+      g_debug ("Adding channel: %s (freq: %u, programs: %u)", 
+               scanned->channel_str, scanned->frequency, scanned->program_count);
       
       /* Create saved channel from scanned channel */
       saved = saved_channel_new (scanned->channel_str, scanned->name, scanned->frequency);
@@ -794,6 +885,7 @@ populate_saved_channels (HdhomerunTunerControls *self)
         display_name = g_strdup_printf ("Channel %s", scanned->channel_str);
       }
       gtk_string_list_append (self->channel_list, display_name);
+      g_debug ("Added to dropdown: %s", display_name);
       g_free (display_name);
     }
     
@@ -801,14 +893,20 @@ populate_saved_channels (HdhomerunTunerControls *self)
                g_list_length (self->saved_channels),
                self->device_id ? self->device_id : "unknown",
                self->tuner_index);
+  } else {
+    g_message ("No scan results available to populate");
   }
   
   /* Set the model on the dropdown */
+  g_message ("Setting model on dropdown");
   gtk_drop_down_set_model (self->channel_dropdown, G_LIST_MODEL (self->channel_list));
   
   /* Enable dropdown if we have channels */
-  gtk_widget_set_sensitive (GTK_WIDGET (self->channel_dropdown), 
-                            g_list_length (self->saved_channels) > 0);
+  gboolean has_channels = g_list_length (self->saved_channels) > 0;
+  gtk_widget_set_sensitive (GTK_WIDGET (self->channel_dropdown), has_channels);
+  g_message ("Dropdown %s (has %u channels)",
+             has_channels ? "enabled" : "disabled",
+             g_list_length (self->saved_channels));
 }
 
 /* Handle channel selection from dropdown */
@@ -830,8 +928,11 @@ on_channel_selected (GtkDropDown *dropdown,
   
   selected = gtk_drop_down_get_selected (dropdown);
   if (selected == GTK_INVALID_LIST_POSITION) {
+    g_debug ("Channel selection: no channel selected");
     return;
   }
+  
+  g_message ("Channel dropdown selection changed to index %u", selected);
   
   /* Get the corresponding saved channel */
   channel = (SavedChannel *)g_list_nth_data (self->saved_channels, selected);
@@ -848,7 +949,7 @@ on_channel_selected (GtkDropDown *dropdown,
   /* Set the channel/frequency on the tuner */
   ret = hdhomerun_device_set_tuner_channel (self->hd_device, channel->channel_str);
   if (ret < 0) {
-    g_warning ("Failed to tune to channel %s on device %s tuner %u",
+    g_warning ("Failed to tune to channel %s on device %s tuner %u (ret=%d)",
                channel->channel_str,
                self->device_id ? self->device_id : "unknown",
                self->tuner_index);
