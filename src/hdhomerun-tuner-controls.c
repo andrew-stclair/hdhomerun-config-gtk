@@ -20,6 +20,7 @@
 #include <glib/gi18n.h>
 #include <libhdhomerun/hdhomerun.h>
 #include <errno.h>
+#include <string.h>
 #include <vlc/vlc.h>
 
 #ifdef GDK_WINDOWING_X11
@@ -115,12 +116,24 @@ on_play_clicked (GtkButton *button,
               (device_ip >> 8) & 0xFF,
               device_ip & 0xFF);
   
-  /* Create stream URL: http://<device_ip>:5004/tuner<N>/<channel>
-   * Use vchannel if available, otherwise use channel */
+  /* Create stream URL: http://<device_ip>:5004/tuner<N>/v<channel> or tuner<N>/ch<frequency>
+   * Use vchannel if available (format: v<channel>), otherwise use channel (format: ch<frequency>) */
   const char *channel_to_use = vchannel ? vchannel : channel;
-  stream_url = g_strdup_printf ("http://%s:5004/tuner%u/%s", 
+  const char *prefix;
+  
+  /* Determine if this is a virtual channel (contains '.') or a raw frequency */
+  if (vchannel || (channel && strchr(channel, '.'))) {
+    /* Virtual channel format: v<channel> */
+    prefix = "v";
+  } else {
+    /* Raw frequency format: ch<frequency> */
+    prefix = "ch";
+  }
+  
+  stream_url = g_strdup_printf ("http://%s:5004/tuner%u/%s%s", 
                                 device_ip_str, 
-                                self->tuner_index, 
+                                self->tuner_index,
+                                prefix,
                                 channel_to_use);
   g_message ("Stream URL: %s", stream_url);
   
