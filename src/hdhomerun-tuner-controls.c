@@ -27,6 +27,18 @@
 #include <gdk/x11/gdkx.h>
 #endif
 
+/* Stream buffer size - 2MB should hold ~1 second of HD video */
+#define STREAM_BUFFER_SIZE (2 * 1024 * 1024)
+
+/* Structure to hold stream buffer data */
+typedef struct {
+  guint8 *data;
+  gsize size;
+  gsize write_pos;
+  gsize read_pos;
+  GMutex mutex;
+} StreamBuffer;
+
 struct _HdhomerunTunerControls
 {
   GtkBox parent_instance;
@@ -51,20 +63,174 @@ struct _HdhomerunTunerControls
   libvlc_instance_t *vlc_instance;
   libvlc_media_player_t *vlc_player;
   libvlc_media_t *vlc_media;
+  
+  /* UDP Streaming */
+  StreamBuffer *stream_buffer;
+  guint stream_timeout_id;
 };
 
 G_DEFINE_FINAL_TYPE (HdhomerunTunerControls, hdhomerun_tuner_controls, GTK_TYPE_BOX)
+
+/* Stream buffer functions */
+static StreamBuffer *
+stream_buffer_new (void)
+{
+  StreamBuffer *buffer = g_new0 (StreamBuffer, 1);
+  buffer->data = g_malloc (STREAM_BUFFER_SIZE);
+  buffer->size = STREAM_BUFFER_SIZE;
+  buffer->write_pos = 0;
+  buffer->read_pos = 0;
+  g_mutex_init (&buffer->mutex);
+  return buffer;
+}
+
+static void
+stream_buffer_free (StreamBuffer *buffer)
+{
+  if (!buffer)
+    return;
+  g_mutex_clear (&buffer->mutex);
+  g_free (buffer->data);
+  g_free (buffer);
+}
+
+static gsize
+stream_buffer_available (StreamBuffer *buffer)
+{
+  gsize available;
+  g_mutex_lock (&buffer->mutex);
+  if (buffer->write_pos >= buffer->read_pos)
+    available = buffer->write_pos - buffer->read_pos;
+  else
+    available = (buffer->size - buffer->read_pos) + buffer->write_pos;
+  g_mutex_unlock (&buffer->mutex);
+  return available;
+}
+
+static gsize
+stream_buffer_write (StreamBuffer *buffer, const guint8 *data, gsize len)
+{
+  gsize written = 0;
+  g_mutex_lock (&buffer->mutex);
+  
+  while (len > 0) {
+    gsize space_to_end = buffer->size - buffer->write_pos;
+    gsize to_write = MIN (len, space_to_end);
+    
+    /* Check if buffer is full (write would overtake read) */
+    gsize next_write = (buffer->write_pos + to_write) % buffer->size;
+    if (buffer->write_pos < buffer->read_pos && next_write >= buffer->read_pos) {
+      break; /* Buffer full */
+    }
+    if (buffer->write_pos >= buffer->read_pos && next_write >= buffer->read_pos && next_write < buffer->write_pos) {
+      break; /* Buffer full (wrapped) */
+    }
+    
+    memcpy (buffer->data + buffer->write_pos, data, to_write);
+    buffer->write_pos = (buffer->write_pos + to_write) % buffer->size;
+    data += to_write;
+    len -= to_write;
+    written += to_write;
+  }
+  
+  g_mutex_unlock (&buffer->mutex);
+  return written;
+}
+
+static gsize
+stream_buffer_read (StreamBuffer *buffer, guint8 *data, gsize len)
+{
+  gsize read = 0;
+  g_mutex_lock (&buffer->mutex);
+  
+  while (len > 0 && buffer->read_pos != buffer->write_pos) {
+    gsize available_to_end = (buffer->write_pos > buffer->read_pos) ?
+                             (buffer->write_pos - buffer->read_pos) :
+                             (buffer->size - buffer->read_pos);
+    gsize to_read = MIN (len, available_to_end);
+    
+    memcpy (data, buffer->data + buffer->read_pos, to_read);
+    buffer->read_pos = (buffer->read_pos + to_read) % buffer->size;
+    data += to_read;
+    len -= to_read;
+    read += to_read;
+  }
+  
+  g_mutex_unlock (&buffer->mutex);
+  return read;
+}
+
+/* VLC imem callbacks */
+static int
+vlc_imem_open (void *opaque, void **datap, uint64_t *sizep)
+{
+  (void)opaque;
+  (void)datap;
+  (void)sizep;
+  return 0;
+}
+
+static ssize_t
+vlc_imem_read (void *opaque, unsigned char *buf, size_t len)
+{
+  HdhomerunTunerControls *self = (HdhomerunTunerControls *)opaque;
+  
+  if (!self->stream_buffer || !self->playing)
+    return 0;
+  
+  return stream_buffer_read (self->stream_buffer, buf, len);
+}
+
+static int
+vlc_imem_seek (void *opaque, uint64_t offset)
+{
+  (void)opaque;
+  (void)offset;
+  /* Seeking not supported for live streams */
+  return -1;
+}
+
+static void
+vlc_imem_close (void *opaque)
+{
+  (void)opaque;
+}
+
+/* Timeout callback to receive stream data */
+static gboolean
+stream_recv_timeout (gpointer user_data)
+{
+  HdhomerunTunerControls *self = HDHOMERUN_TUNER_CONTROLS (user_data);
+  size_t actual_size;
+  uint8_t *data;
+  
+  if (!self->playing || !self->hd_device || !self->stream_buffer)
+    return G_SOURCE_REMOVE;
+  
+  /* Receive data from HDHomeRun device */
+  data = hdhomerun_device_stream_recv (self->hd_device, 
+                                        VIDEO_DATA_BUFFER_SIZE_1S / 20, /* ~50ms worth */
+                                        &actual_size);
+  
+  if (data && actual_size > 0) {
+    gsize written = stream_buffer_write (self->stream_buffer, data, actual_size);
+    if (written < actual_size) {
+      g_debug ("Stream buffer full, dropped %zu bytes", actual_size - written);
+    }
+  }
+  
+  return G_SOURCE_CONTINUE;
+}
 
 static void
 on_play_clicked (GtkButton *button,
                  HdhomerunTunerControls *self)
 {
   int ret;
-  char *stream_url;
-  uint32_t device_ip;
-  char device_ip_str[16];
-  char *vchannel = NULL;
-  char *channel = NULL;
+  const char *vlc_args[] = {
+    "--demux=ts",
+    "--no-audio"
+  };
   
   (void)button; /* unused */
   
@@ -73,36 +239,19 @@ on_play_clicked (GtkButton *button,
     return;
   }
   
-  g_message ("Starting playback for device %s tuner %u", 
+  if (self->playing) {
+    g_warning ("Already playing");
+    return;
+  }
+  
+  g_message ("Starting UDP streaming playback for device %s tuner %u", 
              self->device_id ? self->device_id : "unknown", 
              self->tuner_index);
   
-  /* Get the current tuned channel/vchannel */
-  ret = hdhomerun_device_get_tuner_vchannel (self->hd_device, &vchannel);
-  if (ret < 0 || !vchannel || !*vchannel) {
-    /* Try getting the regular channel if vchannel fails */
-    ret = hdhomerun_device_get_tuner_channel (self->hd_device, &channel);
-    if (ret < 0 || !channel || !*channel) {
-      g_warning ("No channel tuned - please tune to a channel first");
-      return;
-    }
-  }
-  
-  /* Validate that we got a proper channel/frequency, not a target URL
-   * Target URLs start with protocols like "rtp://", "udp://", "p://" etc.
-   * If we get a target, try to get the channel instead */
-  if (vchannel && (strstr(vchannel, "://") != NULL)) {
-    g_message ("Got target URL in vchannel (%s), trying channel instead", vchannel);
-    vchannel = NULL;
-    ret = hdhomerun_device_get_tuner_channel (self->hd_device, &channel);
-    if (ret < 0 || !channel || !*channel || strstr(channel, "://") != NULL) {
-      g_warning ("No valid channel tuned - got target URL instead of channel");
-      return;
-    }
-  } else if (channel && (strstr(channel, "://") != NULL)) {
-    g_message ("Got target URL in channel (%s), cannot determine tuned frequency", channel);
-    g_warning ("No valid channel tuned - got target URL instead of channel");
-    return;
+  /* Create stream buffer */
+  if (!self->stream_buffer) {
+    self->stream_buffer = stream_buffer_new ();
+    g_message ("Created stream buffer (%zu bytes)", (gsize)STREAM_BUFFER_SIZE);
   }
   
   /* Start streaming from the device */
@@ -118,66 +267,32 @@ on_play_clicked (GtkButton *button,
              self->device_id ? self->device_id : "unknown", 
              self->tuner_index);
   
-  /* Get the device IP address for the stream URL */
-  device_ip = hdhomerun_device_get_device_ip (self->hd_device);
-  if (device_ip == 0) {
-    g_warning ("Failed to get device IP address");
-    hdhomerun_device_stream_stop (self->hd_device);
-    return;
-  }
-  
-  /* Convert IP address from uint32 to string */
-  g_snprintf (device_ip_str, sizeof (device_ip_str), "%u.%u.%u.%u",
-              (device_ip >> 24) & 0xFF,
-              (device_ip >> 16) & 0xFF,
-              (device_ip >> 8) & 0xFF,
-              device_ip & 0xFF);
-  
-  /* Create stream URL: http://<device_ip>:5004/tuner<N>/v<channel> or tuner<N>/ch<frequency>
-   * Use vchannel if available (format: v<channel>), otherwise use channel (format: ch<frequency>) */
-  const char *channel_to_use = vchannel ? vchannel : channel;
-  const char *prefix;
-  
-  /* Determine if this is a virtual channel or a raw frequency
-   * Virtual channels are shorter (e.g., "5", "5.1", "13", "13.2", "300.12"), less than 9 chars
-   * Raw frequencies are 9+ characters (e.g., "543500000") */
-  if (vchannel || (channel && strlen(channel) < 9)) {
-    /* Virtual channel format: v<channel> */
-    prefix = "v";
-  } else {
-    /* Raw frequency format: ch<frequency> */
-    prefix = "ch";
-  }
-  
-  stream_url = g_strdup_printf ("http://%s:5004/tuner%u/%s%s", 
-                                device_ip_str, 
-                                self->tuner_index,
-                                prefix,
-                                channel_to_use);
-  g_message ("Stream URL: %s", stream_url);
-  
   /* Initialize VLC if not already done */
   if (!self->vlc_instance) {
-    /* No special arguments needed - let VLC auto-detect */
-    self->vlc_instance = libvlc_new (0, NULL);
+    self->vlc_instance = libvlc_new (2, vlc_args);
     if (!self->vlc_instance) {
       g_warning ("Failed to initialize VLC");
-      g_free (stream_url);
       hdhomerun_device_stream_stop (self->hd_device);
       return;
     }
     g_message ("VLC instance created");
   }
   
-  /* Create VLC media from stream URL */
-  self->vlc_media = libvlc_media_new_location (self->vlc_instance, stream_url);
-  g_free (stream_url);
+  /* Create VLC media using imem (memory input) */
+  self->vlc_media = libvlc_media_new_callbacks (self->vlc_instance,
+                                                 vlc_imem_open,
+                                                 vlc_imem_read,
+                                                 vlc_imem_seek,
+                                                 vlc_imem_close,
+                                                 self);
   
   if (!self->vlc_media) {
-    g_warning ("Failed to create VLC media");
+    g_warning ("Failed to create VLC media with imem");
     hdhomerun_device_stream_stop (self->hd_device);
     return;
   }
+  
+  g_message ("VLC media created with imem callbacks");
   
   /* Create VLC media player if not already done */
   if (!self->vlc_player) {
@@ -210,17 +325,28 @@ on_play_clicked (GtkButton *button,
     }
   }
   
+  /* Mark as playing before starting playback */
+  self->playing = TRUE;
+  
+  /* Start the timeout to receive stream data (every 50ms) */
+  self->stream_timeout_id = g_timeout_add (50, stream_recv_timeout, self);
+  g_message ("Started stream receive timeout (ID: %u)", self->stream_timeout_id);
+  
   /* Play the media */
   ret = libvlc_media_player_play (self->vlc_player);
   if (ret < 0) {
     g_warning ("Failed to start VLC playback");
+    self->playing = FALSE;
+    if (self->stream_timeout_id > 0) {
+      g_source_remove (self->stream_timeout_id);
+      self->stream_timeout_id = 0;
+    }
     hdhomerun_device_stream_stop (self->hd_device);
     return;
   }
   
-  g_message ("VLC playback started");
+  g_message ("VLC playback started with UDP streaming");
   
-  self->playing = TRUE;
   gtk_widget_set_sensitive (GTK_WIDGET (self->play_button), FALSE);
   gtk_widget_set_sensitive (GTK_WIDGET (self->stop_button), TRUE);
 }
@@ -240,6 +366,16 @@ on_stop_clicked (GtkButton *button,
              self->device_id ? self->device_id : "unknown", 
              self->tuner_index);
   
+  /* Mark as not playing */
+  self->playing = FALSE;
+  
+  /* Remove the timeout */
+  if (self->stream_timeout_id > 0) {
+    g_source_remove (self->stream_timeout_id);
+    self->stream_timeout_id = 0;
+    g_message ("Removed stream receive timeout");
+  }
+  
   /* Stop VLC playback */
   if (self->vlc_player) {
     libvlc_media_player_stop (self->vlc_player);
@@ -252,14 +388,14 @@ on_stop_clicked (GtkButton *button,
     self->vlc_media = NULL;
   }
   
-  /* Stop streaming from the device */
+  /* Stop streaming from the device and flush buffer */
+  hdhomerun_device_stream_flush (self->hd_device);
   hdhomerun_device_stream_stop (self->hd_device);
   
   g_message ("Successfully stopped streaming from device %s tuner %u", 
              self->device_id ? self->device_id : "unknown", 
              self->tuner_index);
   
-  self->playing = FALSE;
   gtk_widget_set_sensitive (GTK_WIDGET (self->play_button), TRUE);
   gtk_widget_set_sensitive (GTK_WIDGET (self->stop_button), FALSE);
 }
@@ -370,8 +506,16 @@ hdhomerun_tuner_controls_finalize (GObject *object)
              self->device_id ? self->device_id : "unknown",
              self->tuner_index);
   
+  /* Mark as not playing and remove timeout */
+  self->playing = FALSE;
+  if (self->stream_timeout_id > 0) {
+    g_source_remove (self->stream_timeout_id);
+    self->stream_timeout_id = 0;
+  }
+  
   /* Stop streaming if active */
-  if (self->playing && self->hd_device) {
+  if (self->hd_device) {
+    hdhomerun_device_stream_flush (self->hd_device);
     hdhomerun_device_stream_stop (self->hd_device);
   }
   
@@ -392,6 +536,12 @@ hdhomerun_tuner_controls_finalize (GObject *object)
     libvlc_release (self->vlc_instance);
     self->vlc_instance = NULL;
     g_message ("VLC instance released");
+  }
+  
+  /* Clean up stream buffer */
+  if (self->stream_buffer) {
+    stream_buffer_free (self->stream_buffer);
+    self->stream_buffer = NULL;
   }
   
   /* Destroy the device handle */
