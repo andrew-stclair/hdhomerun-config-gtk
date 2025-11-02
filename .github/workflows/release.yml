@@ -30,7 +30,10 @@ jobs:
           gettext \
           appstream \
           desktop-file-utils \
-          pkg-config
+          pkg-config \
+          debhelper \
+          devscripts \
+          dpkg-dev
     
     - name: Create libhdhomerun pkg-config file
       run: |
@@ -57,16 +60,46 @@ jobs:
         meson compile -C builddir
         meson dist -C builddir --no-tests
     
+    - name: Prepare Debian package
+      env:
+        DEBFULLNAME: ${{ secrets.DEBFULLNAME }}
+        DEBEMAIL: ${{ secrets.DEBEMAIL }}
+      run: |
+        # Extract version from tag (remove 'v' prefix)
+        VERSION="${{ github.ref_name }}"
+        VERSION="${VERSION#v}"
+        
+        # Set default values if secrets are not set
+        export DEBFULLNAME="${DEBFULLNAME:-GitHub Actions}"
+        export DEBEMAIL="${DEBEMAIL:-actions@github.com}"
+        
+        # Update debian/control with maintainer info
+        sed -i "s/DEBFULLNAME <DEBEMAIL>/${DEBFULLNAME} <${DEBEMAIL}>/" debian/control
+        
+        # Create debian/changelog with proper version
+        cat > debian/changelog <<EOF
+        hdhomerun-config-gtk (${VERSION}) unstable; urgency=medium
+
+          * Release version ${VERSION}
+
+         -- ${DEBFULLNAME} <${DEBEMAIL}>  $(date -R)
+        EOF
+    
+    - name: Build Debian package
+      run: |
+        dpkg-buildpackage -us -uc -b
+    
     - name: Rename artifact
       run: |
         mkdir -p artifacts
         cp builddir/meson-dist/*.tar.xz artifacts/hdhomerun-config-gtk-${{ github.ref_name }}-${{ matrix.arch }}.tar.xz
+        cp ../*.deb artifacts/ 2>/dev/null || true
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: hdhomerun-config-gtk-${{ matrix.arch }}
-        path: artifacts/*.tar.xz
+        path: artifacts/*
   
   release:
     needs: build
@@ -83,5 +116,7 @@ jobs:
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        files: artifacts/**/*.tar.xz
+        files: |
+          artifacts/**/*.tar.xz
+          artifacts/**/*.deb
         generate_release_notes: true

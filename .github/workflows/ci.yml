@@ -31,7 +31,10 @@ jobs:
           gettext \
           appstream \
           desktop-file-utils \
-          pkg-config
+          pkg-config \
+          debhelper \
+          devscripts \
+          dpkg-dev
     
     - name: Create libhdhomerun pkg-config file
       run: |
@@ -59,11 +62,41 @@ jobs:
         meson test -C builddir || true
         meson install -C builddir --destdir=/tmp/install
     
+    - name: Prepare Debian package
+      env:
+        DEBFULLNAME: ${{ secrets.DEBFULLNAME }}
+        DEBEMAIL: ${{ secrets.DEBEMAIL }}
+      run: |
+        # Get short SHA for version
+        SHORT_SHA=$(git rev-parse --short HEAD)
+        VERSION="0.1.0+git${SHORT_SHA}"
+        
+        # Set default values if secrets are not set
+        export DEBFULLNAME="${DEBFULLNAME:-GitHub Actions}"
+        export DEBEMAIL="${DEBEMAIL:-actions@github.com}"
+        
+        # Update debian/control with maintainer info
+        sed -i "s/DEBFULLNAME <DEBEMAIL>/${DEBFULLNAME} <${DEBEMAIL}>/" debian/control
+        
+        # Create debian/changelog with proper version
+        cat > debian/changelog <<EOF
+        hdhomerun-config-gtk (${VERSION}) unstable; urgency=medium
+
+          * CI build from commit ${SHORT_SHA}
+
+         -- ${DEBFULLNAME} <${DEBEMAIL}>  $(date -R)
+        EOF
+    
+    - name: Build Debian package
+      run: |
+        dpkg-buildpackage -us -uc -b
+    
     - name: Copy build artifacts
       run: |
         mkdir -p artifacts
         cp builddir/src/hdhomerun-config-gtk artifacts/ || true
         cp -r /tmp/install artifacts/install || true
+        cp ../*.deb artifacts/ 2>/dev/null || true
     
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
