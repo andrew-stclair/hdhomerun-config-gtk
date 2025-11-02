@@ -1,0 +1,35 @@
+# NOTE: This is a template file. During CI/CD builds, the Maintainer field
+# will be dynamically replaced with values from GitHub secrets (DEBFULLNAME and DEBEMAIL).
+Source: hdhomerun-config-gtk
+Section: video
+Priority: optional
+Maintainer: DEBFULLNAME <DEBEMAIL>
+Build-Depends: debhelper-compat (= 13),
+               meson (>= 0.59.0),
+               ninja-build,
+               libgtk-4-dev (>= 4.10),
+               libadwaita-1-dev (>= 1.4),
+               libglib2.0-dev (>= 2.76),
+               libhdhomerun-dev,
+               gettext,
+               appstream,
+               desktop-file-utils,
+               pkg-config
+Standards-Version: 4.6.2
+Homepage: https://github.com/andrew-stclair/hdhomerun-config-gtk
+Vcs-Browser: https://github.com/andrew-stclair/hdhomerun-config-gtk
+Vcs-Git: https://github.com/andrew-stclair/hdhomerun-config-gtk.git
+Rules-Requires-Root: no
+
+Package: hdhomerun-config-gtk
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Configure and preview HDHomeRun TV tuners
+ HDHomeRun Config is a GNOME application for configuring and previewing
+ HDHomeRun network TV tuners. It provides an intuitive interface to
+ automatically discover HDHomeRun devices on your network, preview live TV
+ from tuners, scan for channels, manage saved channels, and manually tune
+ to specific frequencies.
+ .
+ The application is built with GTK4 and libadwaita, providing a modern
+ interface that works great on both desktop and mobile devices.

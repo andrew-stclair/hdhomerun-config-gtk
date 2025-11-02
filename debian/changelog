@@ -1,0 +1,7 @@
+# NOTE: This is a template file. During CI/CD builds, this entire file
+# will be dynamically regenerated with the appropriate version and metadata.
+hdhomerun-config-gtk (0.1.0) UNRELEASED; urgency=medium
+
+  * Initial release.
+
+ -- DEBFULLNAME <DEBEMAIL>  Mon, 01 Jan 2024 00:00:00 +0000
