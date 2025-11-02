@@ -77,13 +77,13 @@ jobs:
         sed -i "s/DEBFULLNAME <DEBEMAIL>/${DEBFULLNAME} <${DEBEMAIL}>/" debian/control
         
         # Create debian/changelog with proper version
-        cat > debian/changelog <<EOF
-        hdhomerun-config-gtk (${VERSION}) unstable; urgency=medium
-
-          * Release version ${VERSION}
-
-         -- ${DEBFULLNAME} <${DEBEMAIL}>  $(date -R)
-        EOF
+        {
+          echo "hdhomerun-config-gtk (${VERSION}) unstable; urgency=medium"
+          echo ""
+          echo "  * Release version ${VERSION}"
+          echo ""
+          echo " -- ${DEBFULLNAME} <${DEBEMAIL}>  $(date -R)"
+        } > debian/changelog
     
     - name: Build Debian package
       run: |
