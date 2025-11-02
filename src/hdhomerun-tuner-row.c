@@ -147,6 +147,10 @@ hdhomerun_tuner_row_class_init (HdhomerunTunerRowClass *klass)
 static void
 hdhomerun_tuner_row_init (HdhomerunTunerRow *self)
 {
-  /* AdwActionRow is activatable by default when activated signal is connected */
-  (void)self;
+  GtkWidget *icon;
+  
+  /* Add a chevron icon to make the row visually and functionally activatable */
+  icon = gtk_image_new_from_icon_name ("go-next-symbolic");
+  adw_action_row_add_suffix (ADW_ACTION_ROW (self), icon);
+  adw_action_row_set_activatable_widget (ADW_ACTION_ROW (self), icon);
 }
