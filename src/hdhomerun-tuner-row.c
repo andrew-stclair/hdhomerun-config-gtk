@@ -130,6 +130,7 @@ hdhomerun_tuner_row_class_init (HdhomerunTunerRowClass *klass)
                          "The device ID",
                          NULL,
                          (G_PARAM_READWRITE |
+                          G_PARAM_CONSTRUCT_ONLY |
                           G_PARAM_STATIC_STRINGS));
 
   properties [PROP_TUNER_INDEX] =
@@ -140,6 +141,7 @@ hdhomerun_tuner_row_class_init (HdhomerunTunerRowClass *klass)
                        G_MAXUINT,
                        0,
                        (G_PARAM_READWRITE |
+                        G_PARAM_CONSTRUCT_ONLY |
                         G_PARAM_STATIC_STRINGS));
 
   g_object_class_install_properties (object_class, N_PROPS, properties);
