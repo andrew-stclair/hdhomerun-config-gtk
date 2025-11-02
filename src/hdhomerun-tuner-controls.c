@@ -333,7 +333,7 @@ stream_recv_timeout (gpointer user_data)
 static void
 stop_channel_scan (HdhomerunTunerControls *self)
 {
-  if (!self->scan_state || !self->scan_state->scanning)
+  if (!self->scan_state)
     return;
   
   g_message ("Stopping channel scan");
@@ -447,8 +447,9 @@ scan_advance_timeout (gpointer user_data)
     }
   }
   
-  /* Continue scanning */
-  return G_SOURCE_CONTINUE;
+  /* Continue scanning - call again immediately */
+  g_idle_add (scan_advance_timeout, self);
+  return G_SOURCE_REMOVE;
 }
 
 static void
@@ -456,10 +457,6 @@ on_play_clicked (GtkButton *button,
                  HdhomerunTunerControls *self)
 {
   int ret;
-  const char *vlc_args[] = {
-    "--demux=ts",
-    "--no-audio"
-  };
   
   (void)button; /* unused */
   
@@ -498,7 +495,7 @@ on_play_clicked (GtkButton *button,
   
   /* Initialize VLC if not already done */
   if (!self->vlc_instance) {
-    self->vlc_instance = libvlc_new (2, vlc_args);
+    self->vlc_instance = libvlc_new (0, NULL);
     if (!self->vlc_instance) {
       g_warning ("Failed to initialize VLC");
       hdhomerun_device_stream_stop (self->hd_device);
@@ -507,7 +504,12 @@ on_play_clicked (GtkButton *button,
     g_message ("VLC instance created");
   }
   
-  /* Create VLC media using imem (memory input) */
+  /* Create VLC media using imem (memory input) with TS demux */
+  const char *media_options[] = {
+    ":demux=ts",
+    ":no-audio"
+  };
+  
   self->vlc_media = libvlc_media_new_callbacks (self->vlc_instance,
                                                  vlc_imem_open,
                                                  vlc_imem_read,
@@ -521,7 +523,12 @@ on_play_clicked (GtkButton *button,
     return;
   }
   
-  g_message ("VLC media created with imem callbacks");
+  /* Add media options for TS demux */
+  for (size_t i = 0; i < sizeof(media_options) / sizeof(media_options[0]); i++) {
+    libvlc_media_add_option (self->vlc_media, media_options[i]);
+  }
+  
+  g_message ("VLC media created with imem callbacks and TS demux options");
   
   /* Create VLC media player if not already done */
   if (!self->vlc_player) {
@@ -731,8 +738,8 @@ on_scan_clicked (GtkButton *button,
   /* Disable scan button while scanning */
   gtk_widget_set_sensitive (GTK_WIDGET (self->scan_button), FALSE);
   
-  /* Start the scan loop (check every 100ms) */
-  self->scan_state->scan_timeout_id = g_timeout_add (100, scan_advance_timeout, self);
+  /* Start the scan loop - call once to begin, it will reschedule itself */
+  self->scan_state->scan_timeout_id = g_idle_add (scan_advance_timeout, self);
 }
 
 static gboolean
