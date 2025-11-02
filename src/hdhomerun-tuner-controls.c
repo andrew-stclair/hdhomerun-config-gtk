@@ -19,6 +19,7 @@
 #include "hdhomerun-tuner-controls.h"
 #include <glib/gi18n.h>
 #include <libhdhomerun/hdhomerun.h>
+#include <errno.h>
 
 struct _HdhomerunTunerControls
 {
@@ -272,6 +273,7 @@ hdhomerun_tuner_controls_set_tuner (HdhomerunTunerControls *self,
 {
   uint32_t device_id_int;
   char *label_text;
+  char *endptr;
   int ret;
   
   g_return_if_fail (HDHOMERUN_IS_TUNER_CONTROLS (self));
@@ -301,11 +303,20 @@ hdhomerun_tuner_controls_set_tuner (HdhomerunTunerControls *self,
   gtk_label_set_text (self->device_info_label, label_text);
   g_free (label_text);
   
-  /* Convert device ID from hex string to integer */
-  device_id_int = (uint32_t) strtoul (device_id, NULL, 16);
+  /* Convert device ID from hex string to integer with validation */
+  errno = 0;
+  device_id_int = (uint32_t) strtoul (device_id, &endptr, 16);
+  if (errno != 0 || *endptr != '\0' || endptr == device_id) {
+    g_warning ("Invalid device ID format: %s", device_id);
+    gtk_widget_set_sensitive (GTK_WIDGET (self->play_button), FALSE);
+    gtk_widget_set_sensitive (GTK_WIDGET (self->scan_button), FALSE);
+    gtk_widget_set_sensitive (GTK_WIDGET (self->tune_button), FALSE);
+    return;
+  }
   
-  /* Create a new device handle using device ID and tuner index */
-  self->hd_device = hdhomerun_device_create (device_id_int, HDHOMERUN_DEVICE_ID_WILDCARD, tuner_index, NULL);
+  /* Create a new device handle using device ID and tuner index
+   * Parameters: device_id, device_ip (0 for auto-detect), tuner, debug handle */
+  self->hd_device = hdhomerun_device_create (device_id_int, 0, tuner_index, NULL);
   if (!self->hd_device) {
     g_warning ("Failed to create device handle for %s tuner %u", device_id, tuner_index);
     gtk_widget_set_sensitive (GTK_WIDGET (self->play_button), FALSE);
@@ -318,6 +329,12 @@ hdhomerun_tuner_controls_set_tuner (HdhomerunTunerControls *self,
   ret = hdhomerun_device_set_tuner (self->hd_device, tuner_index);
   if (ret < 0) {
     g_warning ("Failed to set tuner %u on device %s", tuner_index, device_id);
+    hdhomerun_device_destroy (self->hd_device);
+    self->hd_device = NULL;
+    gtk_widget_set_sensitive (GTK_WIDGET (self->play_button), FALSE);
+    gtk_widget_set_sensitive (GTK_WIDGET (self->scan_button), FALSE);
+    gtk_widget_set_sensitive (GTK_WIDGET (self->tune_button), FALSE);
+    return;
   }
   
   g_message ("Successfully configured device %s tuner %u", device_id, tuner_index);
