@@ -76,6 +76,12 @@ jobs:
         # Update debian/control with maintainer info
         sed -i "s/DEBFULLNAME <DEBEMAIL>/${DEBFULLNAME} <${DEBEMAIL}>/" debian/control
         
+        # Verify the replacement succeeded
+        if grep -q "DEBFULLNAME <DEBEMAIL>" debian/control; then
+          echo "Error: Failed to replace maintainer information in debian/control"
+          exit 1
+        fi
+        
         # Create debian/changelog with proper version
         {
           echo "hdhomerun-config-gtk (${VERSION}) unstable; urgency=medium"
@@ -93,7 +99,8 @@ jobs:
       run: |
         mkdir -p artifacts
         cp builddir/meson-dist/*.tar.xz artifacts/hdhomerun-config-gtk-${{ github.ref_name }}-${{ matrix.arch }}.tar.xz
-        cp ../*.deb artifacts/ 2>/dev/null || true
+        # Copy .deb files from parent directory (created by dpkg-buildpackage)
+        cp ../hdhomerun-config-gtk_*.deb artifacts/ 2>/dev/null || true
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4

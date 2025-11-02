@@ -1,3 +1,5 @@
+# NOTE: This is a template file. During CI/CD builds, the Maintainer field
+# will be dynamically replaced with values from GitHub secrets (DEBFULLNAME and DEBEMAIL).
 Source: hdhomerun-config-gtk
 Section: video
 Priority: optional
