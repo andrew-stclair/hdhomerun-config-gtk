@@ -121,8 +121,10 @@ on_play_clicked (GtkButton *button,
   const char *channel_to_use = vchannel ? vchannel : channel;
   const char *prefix;
   
-  /* Determine if this is a virtual channel (contains '.') or a raw frequency */
-  if (vchannel || (channel && strchr(channel, '.'))) {
+  /* Determine if this is a virtual channel (4 digits or less) or a raw frequency (longer)
+   * Virtual channels are short (e.g., "5", "5.1", "13", "13.2"), typically 4 chars or less
+   * Raw frequencies are longer (e.g., "543500000") */
+  if (vchannel || (channel && strlen(channel) <= 4)) {
     /* Virtual channel format: v<channel> */
     prefix = "v";
   } else {
