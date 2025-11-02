@@ -88,6 +88,23 @@ on_play_clicked (GtkButton *button,
     }
   }
   
+  /* Validate that we got a proper channel/frequency, not a target URL
+   * Target URLs start with protocols like "rtp://", "udp://", "p://" etc.
+   * If we get a target, try to get the channel instead */
+  if (vchannel && (strstr(vchannel, "://") != NULL)) {
+    g_message ("Got target URL in vchannel (%s), trying channel instead", vchannel);
+    vchannel = NULL;
+    ret = hdhomerun_device_get_tuner_channel (self->hd_device, &channel);
+    if (ret < 0 || !channel || !*channel || strstr(channel, "://") != NULL) {
+      g_warning ("No valid channel tuned - got target URL instead of channel");
+      return;
+    }
+  } else if (channel && (strstr(channel, "://") != NULL)) {
+    g_message ("Got target URL in channel (%s), cannot determine tuned frequency", channel);
+    g_warning ("No valid channel tuned - got target URL instead of channel");
+    return;
+  }
+  
   /* Start streaming from the device */
   ret = hdhomerun_device_stream_start (self->hd_device);
   if (ret < 0) {
