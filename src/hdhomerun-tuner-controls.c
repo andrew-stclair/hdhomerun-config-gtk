@@ -47,6 +47,13 @@ typedef struct {
   char *name;             /* Channel name if available */
 } ScannedChannel;
 
+/* Structure to hold saved channel information from device lineup */
+typedef struct {
+  char *channel_str;      /* Channel identifier (e.g., "5.1", "13") */
+  char *name;             /* Channel name (e.g., "NBC", "ABC") */
+  guint32 frequency;      /* Frequency in Hz */
+} SavedChannel;
+
 /* Channel scan state */
 typedef struct {
   gboolean scanning;
@@ -92,6 +99,10 @@ struct _HdhomerunTunerControls
   
   /* Channel Scanning */
   ScanState *scan_state;
+  
+  /* Saved Channels */
+  GtkStringList *channel_list;
+  GList *saved_channels;  /* List of SavedChannel* */
 };
 
 G_DEFINE_FINAL_TYPE (HdhomerunTunerControls, hdhomerun_tuner_controls, GTK_TYPE_BOX)
@@ -199,6 +210,27 @@ scanned_channel_new (const char *channel_str, guint32 frequency, guint16 program
 
 static void
 scanned_channel_free (ScannedChannel *channel)
+{
+  if (!channel)
+    return;
+  g_free (channel->channel_str);
+  g_free (channel->name);
+  g_free (channel);
+}
+
+/* Saved channel functions */
+static SavedChannel *
+saved_channel_new (const char *channel_str, const char *name, guint32 frequency)
+{
+  SavedChannel *channel = g_new0 (SavedChannel, 1);
+  channel->channel_str = g_strdup (channel_str);
+  channel->name = name ? g_strdup (name) : NULL;
+  channel->frequency = frequency;
+  return channel;
+}
+
+static void
+saved_channel_free (SavedChannel *channel)
 {
   if (!channel)
     return;
@@ -377,6 +409,9 @@ scan_advance_timeout (gpointer user_data)
     
     /* Re-enable scan button */
     gtk_widget_set_sensitive (GTK_WIDGET (self->scan_button), TRUE);
+    
+    /* Populate saved channels dropdown from scan results */
+    populate_saved_channels (self);
     
     return G_SOURCE_REMOVE;
   }
@@ -726,6 +761,109 @@ is_valid_frequency_string (const char *str)
   return TRUE;
 }
 
+/* Populate saved channels dropdown from scan results */
+static void
+populate_saved_channels (HdhomerunTunerControls *self)
+{
+  GList *iter;
+  
+  g_return_if_fail (HDHOMERUN_IS_TUNER_CONTROLS (self));
+  
+  /* Clear existing saved channels */
+  g_list_free_full (self->saved_channels, (GDestroyNotify)saved_channel_free);
+  self->saved_channels = NULL;
+  
+  /* Clear dropdown */
+  if (self->channel_list) {
+    g_object_unref (self->channel_list);
+  }
+  self->channel_list = gtk_string_list_new (NULL);
+  
+  /* If we have scan results, populate from them */
+  if (self->scan_state && self->scan_state->found_channels) {
+    for (iter = self->scan_state->found_channels; iter != NULL; iter = iter->next) {
+      ScannedChannel *scanned = (ScannedChannel *)iter->data;
+      SavedChannel *saved;
+      char *display_name;
+      
+      /* Create saved channel from scanned channel */
+      saved = saved_channel_new (scanned->channel_str, scanned->name, scanned->frequency);
+      self->saved_channels = g_list_append (self->saved_channels, saved);
+      
+      /* Add to dropdown */
+      if (scanned->name && scanned->name[0] != '\0') {
+        display_name = g_strdup_printf ("%s - %s", scanned->channel_str, scanned->name);
+      } else {
+        display_name = g_strdup_printf ("Channel %s", scanned->channel_str);
+      }
+      gtk_string_list_append (self->channel_list, display_name);
+      g_free (display_name);
+    }
+    
+    g_message ("Populated %u saved channels for device %s tuner %u",
+               g_list_length (self->saved_channels),
+               self->device_id ? self->device_id : "unknown",
+               self->tuner_index);
+  }
+  
+  /* Set the model on the dropdown */
+  gtk_drop_down_set_model (self->channel_dropdown, G_LIST_MODEL (self->channel_list));
+  
+  /* Enable dropdown if we have channels */
+  gtk_widget_set_sensitive (GTK_WIDGET (self->channel_dropdown), 
+                            g_list_length (self->saved_channels) > 0);
+}
+
+/* Handle channel selection from dropdown */
+static void
+on_channel_selected (GtkDropDown *dropdown,
+                     GParamSpec *pspec,
+                     HdhomerunTunerControls *self)
+{
+  guint selected;
+  SavedChannel *channel;
+  int ret;
+  
+  (void)pspec; /* unused */
+  
+  if (!self->hd_device) {
+    g_warning ("Cannot tune: no device selected");
+    return;
+  }
+  
+  selected = gtk_drop_down_get_selected (dropdown);
+  if (selected == GTK_INVALID_LIST_POSITION) {
+    return;
+  }
+  
+  /* Get the corresponding saved channel */
+  channel = (SavedChannel *)g_list_nth_data (self->saved_channels, selected);
+  if (!channel) {
+    g_warning ("Failed to get saved channel at index %u", selected);
+    return;
+  }
+  
+  g_message ("Tuning to saved channel %s (freq: %u) on device %s tuner %u",
+             channel->channel_str, channel->frequency,
+             self->device_id ? self->device_id : "unknown",
+             self->tuner_index);
+  
+  /* Set the channel/frequency on the tuner */
+  ret = hdhomerun_device_set_tuner_channel (self->hd_device, channel->channel_str);
+  if (ret < 0) {
+    g_warning ("Failed to tune to channel %s on device %s tuner %u",
+               channel->channel_str,
+               self->device_id ? self->device_id : "unknown",
+               self->tuner_index);
+    return;
+  }
+  
+  g_message ("Successfully tuned to channel %s on device %s tuner %u",
+             channel->channel_str,
+             self->device_id ? self->device_id : "unknown",
+             self->tuner_index);
+}
+
 static void
 on_tune_clicked (GtkButton *button,
                  HdhomerunTunerControls *self)
@@ -824,6 +962,15 @@ hdhomerun_tuner_controls_finalize (GObject *object)
     self->scan_state = NULL;
   }
   
+  /* Clean up saved channels */
+  g_list_free_full (self->saved_channels, (GDestroyNotify)saved_channel_free);
+  self->saved_channels = NULL;
+  
+  if (self->channel_list) {
+    g_object_unref (self->channel_list);
+    self->channel_list = NULL;
+  }
+  
   /* Destroy the device handle */
   if (self->hd_device) {
     hdhomerun_device_destroy (self->hd_device);
@@ -874,12 +1021,19 @@ hdhomerun_tuner_controls_init (HdhomerunTunerControls *self)
   self->stream_buffer = NULL;
   self->stream_timeout_id = 0;
   self->scan_state = NULL;
+  self->channel_list = NULL;
+  self->saved_channels = NULL;
   gtk_widget_set_sensitive (GTK_WIDGET (self->stop_button), FALSE);
   
   /* Initially disable controls until a tuner is selected */
   gtk_widget_set_sensitive (GTK_WIDGET (self->play_button), FALSE);
   gtk_widget_set_sensitive (GTK_WIDGET (self->scan_button), FALSE);
   gtk_widget_set_sensitive (GTK_WIDGET (self->tune_button), FALSE);
+  gtk_widget_set_sensitive (GTK_WIDGET (self->channel_dropdown), FALSE);
+  
+  /* Connect dropdown selection signal */
+  g_signal_connect (self->channel_dropdown, "notify::selected",
+                    G_CALLBACK (on_channel_selected), self);
 }
 
 void
