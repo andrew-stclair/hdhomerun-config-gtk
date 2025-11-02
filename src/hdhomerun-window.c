@@ -19,6 +19,7 @@
 #include "hdhomerun-config-gtk-config.h"
 #include "hdhomerun-window.h"
 #include "hdhomerun-device-row.h"
+#include "hdhomerun-tuner-row.h"
 #include "hdhomerun-tuner-controls.h"
 
 #include <glib/gi18n.h>
@@ -153,15 +154,21 @@ on_refresh_clicked (GtkButton *button,
           char ip_address_str[HDHOMERUN_IP_STRING_SIZE];  /* Buffer for IPv4/IPv6 address string */
           uint32_t device_id;
           char device_id_str[9];    /* Buffer for 8-char hex ID plus null */
+          uint8_t tuner_count;
           HdhomerunDeviceRow *row;
           
           device_id = hdhomerun_discover2_device_get_device_id (device);
           g_snprintf (device_id_str, sizeof (device_id_str), "%08X", device_id);
           
+          /* Get the number of tuners on this device */
+          tuner_count = hdhomerun_discover2_device_get_tuner_count (device);
+          
           /* Iterate through all network interfaces for this device */
           device_if = hdhomerun_discover2_iter_device_if_first (device);
           while (device_if)
             {
+              unsigned int i;
+              
               hdhomerun_discover2_device_if_get_ip_addr (device_if, &ip_address);
               /* Convert IP address to string, FALSE omits port for display */
               hdhomerun_sock_sockaddr_to_ip_str (ip_address_str, (struct sockaddr *)&ip_address, FALSE);
@@ -170,6 +177,18 @@ on_refresh_clicked (GtkButton *button,
               gtk_list_box_append (self->device_list, GTK_WIDGET (row));
               
               g_message ("Found device: %s at %s", device_id_str, ip_address_str);
+              g_message ("Device has %u tuner(s)", tuner_count);
+              
+              /* Add tuner rows as children of the device row */
+              for (i = 0; i < tuner_count; i++)
+                {
+                  HdhomerunTunerRow *tuner_row;
+                  
+                  tuner_row = hdhomerun_tuner_row_new (device_id_str, i);
+                  adw_expander_row_add_row (ADW_EXPANDER_ROW (row), GTK_WIDGET (tuner_row));
+                  
+                  g_message ("Added tuner %u to device %s", i, device_id_str);
+                }
               
               device_if = hdhomerun_discover2_iter_device_if_next (device_if);
             }

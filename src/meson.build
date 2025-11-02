@@ -3,6 +3,7 @@ hdhomerun_sources = [
   'hdhomerun-application.c',
   'hdhomerun-window.c',
   'hdhomerun-device-row.c',
+  'hdhomerun-tuner-row.c',
   'hdhomerun-tuner-controls.c',
 ]
 
