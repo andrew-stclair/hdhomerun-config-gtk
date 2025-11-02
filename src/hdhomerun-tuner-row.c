@@ -91,14 +91,23 @@ hdhomerun_tuner_row_set_property (GObject      *object,
     case PROP_DEVICE_ID:
       g_free (self->device_id);
       self->device_id = g_value_dup_string (value);
+      /* Update title when device_id changes */
+      if (self->device_id)
+        {
+          char *title = g_strdup_printf ("%s - Tuner %u", self->device_id, self->tuner_index);
+          adw_preferences_row_set_title (ADW_PREFERENCES_ROW (self), title);
+          g_free (title);
+        }
       break;
     case PROP_TUNER_INDEX:
       self->tuner_index = g_value_get_uint (value);
-      {
-        char *title = g_strdup_printf ("Tuner %u", self->tuner_index);
-        adw_preferences_row_set_title (ADW_PREFERENCES_ROW (self), title);
-        g_free (title);
-      }
+      /* Update title when tuner_index changes */
+      if (self->device_id)
+        {
+          char *title = g_strdup_printf ("%s - Tuner %u", self->device_id, self->tuner_index);
+          adw_preferences_row_set_title (ADW_PREFERENCES_ROW (self), title);
+          g_free (title);
+        }
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
