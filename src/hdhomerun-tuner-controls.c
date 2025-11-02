@@ -20,6 +20,11 @@
 #include <glib/gi18n.h>
 #include <libhdhomerun/hdhomerun.h>
 #include <errno.h>
+#include <vlc/vlc.h>
+
+#ifdef GDK_WINDOWING_X11
+#include <gdk/x11/gdkx.h>
+#endif
 
 struct _HdhomerunTunerControls
 {
@@ -40,6 +45,11 @@ struct _HdhomerunTunerControls
   char *device_id;
   guint tuner_index;
   struct hdhomerun_device_t *hd_device;
+  
+  /* VLC */
+  libvlc_instance_t *vlc_instance;
+  libvlc_media_player_t *vlc_player;
+  libvlc_media_t *vlc_media;
 };
 
 G_DEFINE_FINAL_TYPE (HdhomerunTunerControls, hdhomerun_tuner_controls, GTK_TYPE_BOX)
@@ -49,6 +59,9 @@ on_play_clicked (GtkButton *button,
                  HdhomerunTunerControls *self)
 {
   int ret;
+  char *stream_url;
+  uint32_t device_ip;
+  char device_ip_str[16];
   
   (void)button; /* unused */
   
@@ -74,6 +87,91 @@ on_play_clicked (GtkButton *button,
              self->device_id ? self->device_id : "unknown", 
              self->tuner_index);
   
+  /* Get the device IP address for the stream URL */
+  device_ip = hdhomerun_device_get_device_ip (self->hd_device);
+  if (device_ip == 0) {
+    g_warning ("Failed to get device IP address");
+    hdhomerun_device_stream_stop (self->hd_device);
+    return;
+  }
+  
+  /* Convert IP address from uint32 to string */
+  g_snprintf (device_ip_str, sizeof (device_ip_str), "%u.%u.%u.%u",
+              (device_ip >> 24) & 0xFF,
+              (device_ip >> 16) & 0xFF,
+              (device_ip >> 8) & 0xFF,
+              device_ip & 0xFF);
+  
+  /* Create stream URL: http://<device_ip>:5004/auto/v<tuner> */
+  stream_url = g_strdup_printf ("http://%s:5004/auto/v%u", device_ip_str, self->tuner_index);
+  g_message ("Stream URL: %s", stream_url);
+  
+  /* Initialize VLC if not already done */
+  if (!self->vlc_instance) {
+    const char *vlc_args[] = {
+      "--no-xlib",  /* Don't use Xlib for X11 */
+    };
+    self->vlc_instance = libvlc_new (1, vlc_args);
+    if (!self->vlc_instance) {
+      g_warning ("Failed to initialize VLC");
+      g_free (stream_url);
+      hdhomerun_device_stream_stop (self->hd_device);
+      return;
+    }
+    g_message ("VLC instance created");
+  }
+  
+  /* Create VLC media from stream URL */
+  self->vlc_media = libvlc_media_new_location (self->vlc_instance, stream_url);
+  g_free (stream_url);
+  
+  if (!self->vlc_media) {
+    g_warning ("Failed to create VLC media");
+    hdhomerun_device_stream_stop (self->hd_device);
+    return;
+  }
+  
+  /* Create VLC media player if not already done */
+  if (!self->vlc_player) {
+    self->vlc_player = libvlc_media_player_new (self->vlc_instance);
+    if (!self->vlc_player) {
+      g_warning ("Failed to create VLC media player");
+      libvlc_media_release (self->vlc_media);
+      self->vlc_media = NULL;
+      hdhomerun_device_stream_stop (self->hd_device);
+      return;
+    }
+    g_message ("VLC media player created");
+  }
+  
+  /* Set the media to the player */
+  libvlc_media_player_set_media (self->vlc_player, self->vlc_media);
+  
+  /* Set up video output to the GtkDrawingArea - X11 only for now */
+  GtkNative *native = gtk_widget_get_native (GTK_WIDGET (self->video_preview));
+  if (native) {
+    GdkSurface *surface = gtk_native_get_surface (native);
+    if (surface) {
+#ifdef GDK_WINDOWING_X11
+      if (GDK_IS_X11_SURFACE (surface)) {
+        Window x_window = GDK_SURFACE_XID (surface);
+        libvlc_media_player_set_xwindow (self->vlc_player, x_window);
+        g_message ("Set VLC X11 window: %lu", (unsigned long)x_window);
+      }
+#endif
+    }
+  }
+  
+  /* Play the media */
+  ret = libvlc_media_player_play (self->vlc_player);
+  if (ret < 0) {
+    g_warning ("Failed to start VLC playback");
+    hdhomerun_device_stream_stop (self->hd_device);
+    return;
+  }
+  
+  g_message ("VLC playback started");
+  
   self->playing = TRUE;
   gtk_widget_set_sensitive (GTK_WIDGET (self->play_button), FALSE);
   gtk_widget_set_sensitive (GTK_WIDGET (self->stop_button), TRUE);
@@ -93,6 +191,18 @@ on_stop_clicked (GtkButton *button,
   g_message ("Stopping playback for device %s tuner %u", 
              self->device_id ? self->device_id : "unknown", 
              self->tuner_index);
+  
+  /* Stop VLC playback */
+  if (self->vlc_player) {
+    libvlc_media_player_stop (self->vlc_player);
+    g_message ("VLC playback stopped");
+  }
+  
+  /* Release VLC media */
+  if (self->vlc_media) {
+    libvlc_media_release (self->vlc_media);
+    self->vlc_media = NULL;
+  }
   
   /* Stop streaming from the device */
   hdhomerun_device_stream_stop (self->hd_device);
@@ -214,6 +324,25 @@ hdhomerun_tuner_controls_finalize (GObject *object)
     hdhomerun_device_stream_stop (self->hd_device);
   }
   
+  /* Clean up VLC resources */
+  if (self->vlc_player) {
+    libvlc_media_player_stop (self->vlc_player);
+    libvlc_media_player_release (self->vlc_player);
+    self->vlc_player = NULL;
+    g_message ("VLC media player released");
+  }
+  
+  if (self->vlc_media) {
+    libvlc_media_release (self->vlc_media);
+    self->vlc_media = NULL;
+  }
+  
+  if (self->vlc_instance) {
+    libvlc_release (self->vlc_instance);
+    self->vlc_instance = NULL;
+    g_message ("VLC instance released");
+  }
+  
   /* Destroy the device handle */
   if (self->hd_device) {
     hdhomerun_device_destroy (self->hd_device);
@@ -258,6 +387,9 @@ hdhomerun_tuner_controls_init (HdhomerunTunerControls *self)
   self->device_id = NULL;
   self->tuner_index = 0;
   self->hd_device = NULL;
+  self->vlc_instance = NULL;
+  self->vlc_player = NULL;
+  self->vlc_media = NULL;
   gtk_widget_set_sensitive (GTK_WIDGET (self->stop_button), FALSE);
   
   /* Initially disable controls until a tuner is selected */
@@ -284,6 +416,14 @@ hdhomerun_tuner_controls_set_tuner (HdhomerunTunerControls *self,
   /* Clean up existing device if any */
   if (self->hd_device) {
     if (self->playing) {
+      /* Stop VLC playback */
+      if (self->vlc_player) {
+        libvlc_media_player_stop (self->vlc_player);
+      }
+      if (self->vlc_media) {
+        libvlc_media_release (self->vlc_media);
+        self->vlc_media = NULL;
+      }
       hdhomerun_device_stream_stop (self->hd_device);
       self->playing = FALSE;
       gtk_widget_set_sensitive (GTK_WIDGET (self->play_button), TRUE);
