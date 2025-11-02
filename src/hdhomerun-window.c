@@ -170,6 +170,7 @@ on_refresh_clicked (GtkButton *button,
           while (device_if)
             {
               unsigned int i;
+              HdhomerunTunerRow *tuner_row;
               
               hdhomerun_discover2_device_if_get_ip_addr (device_if, &ip_address);
               /* Convert IP address to string, FALSE omits port for display */
@@ -181,8 +182,6 @@ on_refresh_clicked (GtkButton *button,
               /* Add tuner rows directly to the device list */
               for (i = 0; i < tuner_count; i++)
                 {
-                  HdhomerunTunerRow *tuner_row;
-                  
                   tuner_row = hdhomerun_tuner_row_new (device_id_str, i);
                   gtk_list_box_append (self->device_list, GTK_WIDGET (tuner_row));
                   
