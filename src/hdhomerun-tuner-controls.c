@@ -131,19 +131,6 @@ stream_buffer_free (StreamBuffer *buffer)
 }
 
 static gsize
-stream_buffer_available (StreamBuffer *buffer)
-{
-  gsize available;
-  g_mutex_lock (&buffer->mutex);
-  if (buffer->write_pos >= buffer->read_pos)
-    available = buffer->write_pos - buffer->read_pos;
-  else
-    available = (buffer->size - buffer->read_pos) + buffer->write_pos;
-  g_mutex_unlock (&buffer->mutex);
-  return available;
-}
-
-static gsize
 stream_buffer_write (StreamBuffer *buffer, const guint8 *data, gsize len)
 {
   gsize written = 0;
@@ -195,6 +182,9 @@ stream_buffer_read (StreamBuffer *buffer, guint8 *data, gsize len)
   g_mutex_unlock (&buffer->mutex);
   return read;
 }
+
+/* Forward declarations */
+static void populate_saved_channels (HdhomerunTunerControls *self);
 
 /* Scanned channel functions */
 static ScannedChannel *
