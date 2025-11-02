@@ -39,6 +39,28 @@ typedef struct {
   GMutex mutex;
 } StreamBuffer;
 
+/* Structure to hold scanned channel information */
+typedef struct {
+  char *channel_str;      /* Channel identifier (e.g., "5", "13.1") */
+  guint32 frequency;      /* Frequency in Hz */
+  guint16 program_count;  /* Number of programs found */
+  char *name;             /* Channel name if available */
+} ScannedChannel;
+
+/* Channel scan state */
+typedef struct {
+  gboolean scanning;
+  guint scan_timeout_id;
+  GList *found_channels;  /* List of ScannedChannel* */
+  guint32 current_frequency;
+  guint channels_scanned;
+  guint channels_total;
+  AdwDialog *scan_dialog;
+  GtkLabel *scan_status_label;
+  GtkProgressBar *scan_progress_bar;
+  GtkButton *scan_cancel_button;
+} ScanState;
+
 struct _HdhomerunTunerControls
 {
   GtkBox parent_instance;
@@ -67,6 +89,9 @@ struct _HdhomerunTunerControls
   /* UDP Streaming */
   StreamBuffer *stream_buffer;
   guint stream_timeout_id;
+  
+  /* Channel Scanning */
+  ScanState *scan_state;
 };
 
 G_DEFINE_FINAL_TYPE (HdhomerunTunerControls, hdhomerun_tuner_controls, GTK_TYPE_BOX)
@@ -160,6 +185,66 @@ stream_buffer_read (StreamBuffer *buffer, guint8 *data, gsize len)
   return read;
 }
 
+/* Scanned channel functions */
+static ScannedChannel *
+scanned_channel_new (const char *channel_str, guint32 frequency, guint16 program_count, const char *name)
+{
+  ScannedChannel *channel = g_new0 (ScannedChannel, 1);
+  channel->channel_str = g_strdup (channel_str);
+  channel->frequency = frequency;
+  channel->program_count = program_count;
+  channel->name = name ? g_strdup (name) : NULL;
+  return channel;
+}
+
+static void
+scanned_channel_free (ScannedChannel *channel)
+{
+  if (!channel)
+    return;
+  g_free (channel->channel_str);
+  g_free (channel->name);
+  g_free (channel);
+}
+
+static ScanState *
+scan_state_new (void)
+{
+  ScanState *state = g_new0 (ScanState, 1);
+  state->scanning = FALSE;
+  state->scan_timeout_id = 0;
+  state->found_channels = NULL;
+  state->current_frequency = 0;
+  state->channels_scanned = 0;
+  state->channels_total = 0;
+  state->scan_dialog = NULL;
+  state->scan_status_label = NULL;
+  state->scan_progress_bar = NULL;
+  state->scan_cancel_button = NULL;
+  return state;
+}
+
+static void
+scan_state_free (ScanState *state)
+{
+  if (!state)
+    return;
+  
+  if (state->scan_timeout_id > 0) {
+    g_source_remove (state->scan_timeout_id);
+    state->scan_timeout_id = 0;
+  }
+  
+  g_list_free_full (state->found_channels, (GDestroyNotify)scanned_channel_free);
+  
+  /* Dialog widgets are owned by the dialog, don't free them */
+  if (state->scan_dialog) {
+    adw_dialog_close (state->scan_dialog);
+  }
+  
+  g_free (state);
+}
+
 /* VLC imem callbacks */
 static int
 vlc_imem_open (void *opaque, void **datap, uint64_t *sizep)
@@ -219,6 +304,125 @@ stream_recv_timeout (gpointer user_data)
     }
   }
   
+  return G_SOURCE_CONTINUE;
+}
+
+/* Channel scanning functions */
+static void
+stop_channel_scan (HdhomerunTunerControls *self)
+{
+  if (!self->scan_state || !self->scan_state->scanning)
+    return;
+  
+  g_message ("Stopping channel scan");
+  
+  self->scan_state->scanning = FALSE;
+  
+  if (self->scan_state->scan_timeout_id > 0) {
+    g_source_remove (self->scan_state->scan_timeout_id);
+    self->scan_state->scan_timeout_id = 0;
+  }
+  
+  if (self->scan_state->scan_dialog) {
+    adw_dialog_close (self->scan_state->scan_dialog);
+    self->scan_state->scan_dialog = NULL;
+  }
+  
+  /* Re-enable scan button */
+  gtk_widget_set_sensitive (GTK_WIDGET (self->scan_button), TRUE);
+}
+
+static void
+on_scan_cancel_clicked (GtkButton *button, HdhomerunTunerControls *self)
+{
+  (void)button;
+  stop_channel_scan (self);
+}
+
+static gboolean
+scan_advance_timeout (gpointer user_data)
+{
+  HdhomerunTunerControls *self = (HdhomerunTunerControls *)user_data;
+  struct hdhomerun_channelscan_result_t result;
+  int ret;
+  
+  if (!self->scan_state || !self->scan_state->scanning)
+    return G_SOURCE_REMOVE;
+  
+  /* Advance to next channel */
+  ret = hdhomerun_device_channelscan_advance (self->hd_device, &result);
+  
+  if (ret <= 0) {
+    /* Scan complete or error */
+    g_message ("Channel scan complete: found %u channels", 
+               g_list_length (self->scan_state->found_channels));
+    
+    if (self->scan_state->scan_status_label) {
+      char *status_text = g_strdup_printf ("Scan complete! Found %u channel(s)", 
+                                            g_list_length (self->scan_state->found_channels));
+      gtk_label_set_label (self->scan_state->scan_status_label, status_text);
+      g_free (status_text);
+    }
+    
+    if (self->scan_state->scan_progress_bar) {
+      gtk_progress_bar_set_fraction (self->scan_state->scan_progress_bar, 1.0);
+    }
+    
+    if (self->scan_state->scan_cancel_button) {
+      gtk_button_set_label (self->scan_state->scan_cancel_button, "Close");
+    }
+    
+    self->scan_state->scanning = FALSE;
+    self->scan_state->scan_timeout_id = 0;
+    
+    /* Re-enable scan button */
+    gtk_widget_set_sensitive (GTK_WIDGET (self->scan_button), TRUE);
+    
+    return G_SOURCE_REMOVE;
+  }
+  
+  /* Update progress */
+  self->scan_state->current_frequency = result.frequency;
+  self->scan_state->channels_scanned++;
+  
+  if (self->scan_state->scan_status_label) {
+    char *status_text = g_strdup_printf ("Scanning frequency %u MHz...", 
+                                          result.frequency / 1000000);
+    gtk_label_set_label (self->scan_state->scan_status_label, status_text);
+    g_free (status_text);
+  }
+  
+  if (self->scan_state->scan_progress_bar && self->scan_state->channels_total > 0) {
+    double fraction = (double)self->scan_state->channels_scanned / self->scan_state->channels_total;
+    gtk_progress_bar_set_fraction (self->scan_state->scan_progress_bar, fraction);
+  }
+  
+  /* Detect programs on this channel */
+  ret = hdhomerun_device_channelscan_detect (self->hd_device, &result);
+  
+  if (ret > 0 && result.program_count > 0) {
+    g_message ("Found %u program(s) on frequency %u (channel %s)", 
+               result.program_count, result.frequency, result.channel_str);
+    
+    /* Store the found channel */
+    ScannedChannel *channel = scanned_channel_new (result.channel_str, 
+                                                     result.frequency,
+                                                     result.program_count,
+                                                     NULL);
+    self->scan_state->found_channels = g_list_append (self->scan_state->found_channels, channel);
+    
+    /* Update status to show found channel */
+    if (self->scan_state->scan_status_label) {
+      char *status_text = g_strdup_printf ("Found channel %s (%u program%s)", 
+                                            result.channel_str,
+                                            result.program_count,
+                                            result.program_count == 1 ? "" : "s");
+      gtk_label_set_label (self->scan_state->scan_status_label, status_text);
+      g_free (status_text);
+    }
+  }
+  
+  /* Continue scanning */
   return G_SOURCE_CONTINUE;
 }
 
@@ -405,6 +609,10 @@ on_scan_clicked (GtkButton *button,
                  HdhomerunTunerControls *self)
 {
   int ret;
+  GtkWidget *content_box;
+  GtkWidget *status_label;
+  GtkWidget *progress_bar;
+  GtkWidget *cancel_button;
   
   (void)button; /* unused */
   
@@ -413,9 +621,25 @@ on_scan_clicked (GtkButton *button,
     return;
   }
   
+  /* Check if already scanning */
+  if (self->scan_state && self->scan_state->scanning) {
+    g_warning ("Channel scan already in progress");
+    return;
+  }
+  
   g_message ("Starting channel scan for device %s tuner %u", 
              self->device_id ? self->device_id : "unknown", 
              self->tuner_index);
+  
+  /* Initialize scan state if needed */
+  if (!self->scan_state) {
+    self->scan_state = scan_state_new ();
+  }
+  
+  /* Clear any previous scan results */
+  g_list_free_full (self->scan_state->found_channels, (GDestroyNotify)scanned_channel_free);
+  self->scan_state->found_channels = NULL;
+  self->scan_state->channels_scanned = 0;
   
   /* Initialize channel scan with "us-bcast" channelmap
    * TODO: Make channelmap configurable for international support
@@ -428,12 +652,62 @@ on_scan_clicked (GtkButton *button,
     return;
   }
   
+  /* Estimate total channels to scan (US broadcast is typically 69 channels) */
+  self->scan_state->channels_total = 69;
+  
+  /* Create scan progress dialog */
+  AdwDialog *dialog = adw_dialog_new ();
+  adw_dialog_set_title (dialog, "Channel Scan");
+  
+  /* Create content */
+  content_box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 12);
+  gtk_widget_set_margin_start (content_box, 24);
+  gtk_widget_set_margin_end (content_box, 24);
+  gtk_widget_set_margin_top (content_box, 24);
+  gtk_widget_set_margin_bottom (content_box, 24);
+  
+  /* Status label */
+  status_label = gtk_label_new ("Initializing scan...");
+  gtk_widget_add_css_class (status_label, "title-4");
+  gtk_box_append (GTK_BOX (content_box), status_label);
+  
+  /* Progress bar */
+  progress_bar = gtk_progress_bar_new ();
+  gtk_progress_bar_set_show_text (GTK_PROGRESS_BAR (progress_bar), TRUE);
+  gtk_widget_set_size_request (progress_bar, 300, -1);
+  gtk_box_append (GTK_BOX (content_box), progress_bar);
+  
+  /* Cancel button */
+  cancel_button = gtk_button_new_with_label ("Cancel");
+  gtk_widget_set_halign (cancel_button, GTK_ALIGN_CENTER);
+  gtk_widget_add_css_class (cancel_button, "pill");
+  g_signal_connect (cancel_button, "clicked", G_CALLBACK (on_scan_cancel_clicked), self);
+  gtk_box_append (GTK_BOX (content_box), cancel_button);
+  
+  adw_dialog_set_child (dialog, content_box);
+  
+  /* Store dialog and widgets in scan state */
+  self->scan_state->scan_dialog = dialog;
+  self->scan_state->scan_status_label = GTK_LABEL (status_label);
+  self->scan_state->scan_progress_bar = GTK_PROGRESS_BAR (progress_bar);
+  self->scan_state->scan_cancel_button = GTK_BUTTON (cancel_button);
+  self->scan_state->scanning = TRUE;
+  
+  /* Present the dialog */
+  GtkWidget *root = gtk_widget_get_ancestor (GTK_WIDGET (self), ADW_TYPE_APPLICATION_WINDOW);
+  if (root) {
+    adw_dialog_present (dialog, GTK_WIDGET (root));
+  }
+  
   g_message ("Successfully started channel scan for device %s tuner %u", 
              self->device_id ? self->device_id : "unknown", 
              self->tuner_index);
   
-  /* Note: Full channel scan implementation would require advancing through channels
-   * and detecting signals in a loop or async operation. This is a basic initialization. */
+  /* Disable scan button while scanning */
+  gtk_widget_set_sensitive (GTK_WIDGET (self->scan_button), FALSE);
+  
+  /* Start the scan loop (check every 100ms) */
+  self->scan_state->scan_timeout_id = g_timeout_add (100, scan_advance_timeout, self);
 }
 
 static gboolean
@@ -544,6 +818,12 @@ hdhomerun_tuner_controls_finalize (GObject *object)
     self->stream_buffer = NULL;
   }
   
+  /* Clean up scan state */
+  if (self->scan_state) {
+    scan_state_free (self->scan_state);
+    self->scan_state = NULL;
+  }
+  
   /* Destroy the device handle */
   if (self->hd_device) {
     hdhomerun_device_destroy (self->hd_device);
@@ -591,6 +871,9 @@ hdhomerun_tuner_controls_init (HdhomerunTunerControls *self)
   self->vlc_instance = NULL;
   self->vlc_player = NULL;
   self->vlc_media = NULL;
+  self->stream_buffer = NULL;
+  self->stream_timeout_id = 0;
+  self->scan_state = NULL;
   gtk_widget_set_sensitive (GTK_WIDGET (self->stop_button), FALSE);
   
   /* Initially disable controls until a tuner is selected */
