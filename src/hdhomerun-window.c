@@ -169,7 +169,6 @@ on_refresh_clicked (GtkButton *button,
           device_if = hdhomerun_discover2_iter_device_if_first (device);
           while (device_if)
             {
-              unsigned int i;
               HdhomerunTunerRow *tuner_row;
               
               hdhomerun_discover2_device_if_get_ip_addr (device_if, &ip_address);
@@ -180,7 +179,7 @@ on_refresh_clicked (GtkButton *button,
               g_message ("Device has %u tuner(s)", tuner_count);
               
               /* Add tuner rows directly to the device list */
-              for (i = 0; i < tuner_count; i++)
+              for (unsigned int i = 0; i < tuner_count; i++)
                 {
                   tuner_row = hdhomerun_tuner_row_new (device_id_str, i);
                   gtk_list_box_append (self->device_list, GTK_WIDGET (tuner_row));
