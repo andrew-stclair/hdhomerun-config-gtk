@@ -62,6 +62,8 @@ on_play_clicked (GtkButton *button,
   char *stream_url;
   uint32_t device_ip;
   char device_ip_str[16];
+  char *vchannel = NULL;
+  char *channel = NULL;
   
   (void)button; /* unused */
   
@@ -73,6 +75,17 @@ on_play_clicked (GtkButton *button,
   g_message ("Starting playback for device %s tuner %u", 
              self->device_id ? self->device_id : "unknown", 
              self->tuner_index);
+  
+  /* Get the current tuned channel/vchannel */
+  ret = hdhomerun_device_get_tuner_vchannel (self->hd_device, &vchannel);
+  if (ret < 0 || !vchannel || !*vchannel) {
+    /* Try getting the regular channel if vchannel fails */
+    ret = hdhomerun_device_get_tuner_channel (self->hd_device, &channel);
+    if (ret < 0 || !channel || !*channel) {
+      g_warning ("No channel tuned - please tune to a channel first");
+      return;
+    }
+  }
   
   /* Start streaming from the device */
   ret = hdhomerun_device_stream_start (self->hd_device);
@@ -102,8 +115,13 @@ on_play_clicked (GtkButton *button,
               (device_ip >> 8) & 0xFF,
               device_ip & 0xFF);
   
-  /* Create stream URL: http://<device_ip>:5004/auto/v<tuner> */
-  stream_url = g_strdup_printf ("http://%s:5004/auto/v%u", device_ip_str, self->tuner_index);
+  /* Create stream URL: http://<device_ip>:5004/tuner<N>/<channel>
+   * Use vchannel if available, otherwise use channel */
+  const char *channel_to_use = vchannel ? vchannel : channel;
+  stream_url = g_strdup_printf ("http://%s:5004/tuner%u/%s", 
+                                device_ip_str, 
+                                self->tuner_index, 
+                                channel_to_use);
   g_message ("Stream URL: %s", stream_url);
   
   /* Initialize VLC if not already done */
