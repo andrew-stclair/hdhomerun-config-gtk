@@ -27,6 +27,6 @@ G_BEGIN_DECLS
 G_DECLARE_FINAL_TYPE (HdhomerunTunerRow, hdhomerun_tuner_row, HDHOMERUN, TUNER_ROW, AdwActionRow)
 
 HdhomerunTunerRow *hdhomerun_tuner_row_new (const char *device_id,
-                                             unsigned int tuner_index);
+                                             guint tuner_index);
 
 G_END_DECLS

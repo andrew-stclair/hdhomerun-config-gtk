@@ -23,7 +23,7 @@ struct _HdhomerunTunerRow
   AdwActionRow parent_instance;
 
   char *device_id;
-  unsigned int tuner_index;
+  guint tuner_index;
 };
 
 G_DEFINE_FINAL_TYPE (HdhomerunTunerRow, hdhomerun_tuner_row, ADW_TYPE_ACTION_ROW)
@@ -39,7 +39,7 @@ static GParamSpec *properties [N_PROPS];
 
 HdhomerunTunerRow *
 hdhomerun_tuner_row_new (const char *device_id,
-                         unsigned int tuner_index)
+                         guint tuner_index)
 {
   return g_object_new (HDHOMERUN_TYPE_TUNER_ROW,
                        "device-id", device_id,
@@ -153,4 +153,7 @@ hdhomerun_tuner_row_init (HdhomerunTunerRow *self)
   /* Add a chevron icon to make the row visually activatable */
   icon = gtk_image_new_from_icon_name ("go-next-symbolic");
   adw_action_row_add_suffix (ADW_ACTION_ROW (self), icon);
+  
+  /* Make the entire row activatable (clickable) */
+  gtk_list_box_row_set_activatable (GTK_LIST_BOX_ROW (self), TRUE);
 }

@@ -47,7 +47,7 @@ on_play_clicked (GtkButton *button,
   self->playing = TRUE;
   gtk_widget_set_sensitive (GTK_WIDGET (self->play_button), FALSE);
   gtk_widget_set_sensitive (GTK_WIDGET (self->stop_button), TRUE);
-  g_print ("Starting playback...\n");
+  g_message ("Starting playback");
 }
 
 static void
@@ -59,7 +59,7 @@ on_stop_clicked (GtkButton *button,
   self->playing = FALSE;
   gtk_widget_set_sensitive (GTK_WIDGET (self->play_button), TRUE);
   gtk_widget_set_sensitive (GTK_WIDGET (self->stop_button), FALSE);
-  g_print ("Stopping playback...\n");
+  g_message ("Stopping playback");
 }
 
 static void
@@ -69,7 +69,7 @@ on_scan_clicked (GtkButton *button,
   (void)button; /* unused */
   (void)self; /* unused */
   
-  g_print ("Starting channel scan...\n");
+  g_message ("Starting channel scan");
 }
 
 static gboolean
@@ -99,9 +99,9 @@ on_tune_clicked (GtkButton *button,
   
   /* Validate frequency input to prevent format string issues */
   if (is_valid_frequency_string (frequency)) {
-    g_print ("Tuning to frequency: %s\n", frequency);
+    g_message ("Tuning to frequency: %s", frequency);
   } else {
-    g_print ("Invalid or empty frequency entered\n");
+    g_message ("Invalid or empty frequency entered");
   }
 }
 

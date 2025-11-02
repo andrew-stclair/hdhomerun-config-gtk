@@ -179,7 +179,7 @@ on_refresh_clicked (GtkButton *button,
               g_message ("Device has %u tuner(s)", tuner_count);
               
               /* Add tuner rows directly to the device list */
-              for (unsigned int i = 0; i < tuner_count; i++)
+              for (guint i = 0; i < tuner_count; i++)
                 {
                   tuner_row = hdhomerun_tuner_row_new (device_id_str, i);
                   gtk_list_box_append (self->device_list, GTK_WIDGET (tuner_row));
@@ -206,7 +206,7 @@ on_tuner_row_activated (AdwActionRow *action_row,
 {
   HdhomerunTunerRow *tuner_row = HDHOMERUN_TUNER_ROW (action_row);
   char *device_id;
-  unsigned int tuner_index;
+  guint tuner_index;
   
   /* Get the tuner information */
   g_object_get (tuner_row,
