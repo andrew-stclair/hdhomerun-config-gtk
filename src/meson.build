@@ -6,11 +6,14 @@ hdhomerun_sources = [
   'hdhomerun-tuner-controls.c',
 ]
 
+cc = meson.get_compiler('c')
+hdhomerun_dep = cc.find_library('hdhomerun', required: true)
+
 hdhomerun_deps = [
   dependency('gtk4', version: '>= 4.10'),
   dependency('libadwaita-1', version: '>= 1.4'),
   dependency('glib-2.0', version: '>= 2.76'),
-  dependency('hdhomerun'),
+  hdhomerun_dep,
   dependency('vlc', required: false),
 ]
 
