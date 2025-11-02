@@ -68,9 +68,8 @@ jobs:
         DEBFULLNAME: ${{ secrets.DEBFULLNAME }}
         DEBEMAIL: ${{ secrets.DEBEMAIL }}
       run: |
-        # Get short SHA for version
-        SHORT_SHA=$(git rev-parse --short HEAD)
-        VERSION="0.1.0+git${SHORT_SHA}"
+        # Use GitHub run number for version
+        VERSION="0.1.0+build${{ github.run_number }}"
         
         # Set default values if secrets are not set
         export DEBFULLNAME="${DEBFULLNAME:-GitHub Actions}"
@@ -89,7 +88,7 @@ jobs:
         {
           echo "hdhomerun-config-gtk (${VERSION}) unstable; urgency=medium"
           echo ""
-          echo "  * CI build from commit ${SHORT_SHA}"
+          echo "  * CI build #${{ github.run_number }}"
           echo ""
           echo " -- ${DEBFULLNAME} <${DEBEMAIL}>  $(date -R)"
         } > debian/changelog

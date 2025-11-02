@@ -36,6 +36,7 @@
                     <child>
                       <object class="GtkListBox" id="device_list">
                         <property name="selection-mode">single</property>
+                        <signal name="row-activated" handler="on_device_list_row_activated" swapped="no"/>
                         <style>
                           <class name="navigation-sidebar"/>
                         </style>

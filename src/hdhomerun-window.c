@@ -200,6 +200,37 @@ on_refresh_clicked (GtkButton *button,
   hdhomerun_discover_destroy (ds);
 }
 
+static void
+on_device_list_row_activated (GtkListBox *box,
+                              GtkListBoxRow *row,
+                              HdhomerunWindow *self)
+{
+  (void)box; /* unused */
+  
+  /* Check if the activated row is a tuner row */
+  if (HDHOMERUN_IS_TUNER_ROW (row))
+    {
+      char *device_id;
+      unsigned int tuner_index;
+      
+      /* Get the tuner information */
+      g_object_get (row,
+                    "device-id", &device_id,
+                    "tuner-index", &tuner_index,
+                    NULL);
+      
+      g_message ("Selected tuner %u on device %s", tuner_index, device_id);
+      
+      /* Switch to the tuner controls view */
+      gtk_stack_set_visible_child_name (self->content_stack, "tuner");
+      
+      /* Show the split view content on mobile */
+      adw_navigation_split_view_set_show_content (self->split_view, TRUE);
+      
+      g_free (device_id);
+    }
+}
+
 static gboolean
 refresh_devices_async (gpointer user_data)
 {
@@ -243,6 +274,7 @@ hdhomerun_window_class_init (HdhomerunWindowClass *klass)
   gtk_widget_class_bind_template_child (widget_class, HdhomerunWindow, refresh_button);
   gtk_widget_class_bind_template_callback (widget_class, on_add_device_clicked);
   gtk_widget_class_bind_template_callback (widget_class, on_refresh_clicked);
+  gtk_widget_class_bind_template_callback (widget_class, on_device_list_row_activated);
 }
 
 static void
