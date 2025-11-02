@@ -18,6 +18,7 @@
 
 #include "hdhomerun-tuner-controls.h"
 #include <glib/gi18n.h>
+#include <libhdhomerun/hdhomerun.h>
 
 struct _HdhomerunTunerControls
 {
@@ -31,9 +32,13 @@ struct _HdhomerunTunerControls
   GtkDropDown *channel_dropdown;
   GtkEntry *frequency_entry;
   GtkButton *tune_button;
+  GtkLabel *device_info_label;
   
   /* State */
   gboolean playing;
+  char *device_id;
+  guint tuner_index;
+  struct hdhomerun_device_t *hd_device;
 };
 
 G_DEFINE_FINAL_TYPE (HdhomerunTunerControls, hdhomerun_tuner_controls, GTK_TYPE_BOX)
@@ -42,12 +47,35 @@ static void
 on_play_clicked (GtkButton *button,
                  HdhomerunTunerControls *self)
 {
+  int ret;
+  
   (void)button; /* unused */
+  
+  if (!self->hd_device) {
+    g_warning ("Cannot start playback: no device selected");
+    return;
+  }
+  
+  g_message ("Starting playback for device %s tuner %u", 
+             self->device_id ? self->device_id : "unknown", 
+             self->tuner_index);
+  
+  /* Start streaming from the device */
+  ret = hdhomerun_device_stream_start (self->hd_device);
+  if (ret < 0) {
+    g_warning ("Failed to start streaming from device %s tuner %u", 
+               self->device_id ? self->device_id : "unknown", 
+               self->tuner_index);
+    return;
+  }
+  
+  g_message ("Successfully started streaming from device %s tuner %u", 
+             self->device_id ? self->device_id : "unknown", 
+             self->tuner_index);
   
   self->playing = TRUE;
   gtk_widget_set_sensitive (GTK_WIDGET (self->play_button), FALSE);
   gtk_widget_set_sensitive (GTK_WIDGET (self->stop_button), TRUE);
-  g_message ("Starting playback");
 }
 
 static void
@@ -56,20 +84,59 @@ on_stop_clicked (GtkButton *button,
 {
   (void)button; /* unused */
   
+  if (!self->hd_device) {
+    g_warning ("Cannot stop playback: no device selected");
+    return;
+  }
+  
+  g_message ("Stopping playback for device %s tuner %u", 
+             self->device_id ? self->device_id : "unknown", 
+             self->tuner_index);
+  
+  /* Stop streaming from the device */
+  hdhomerun_device_stream_stop (self->hd_device);
+  
+  g_message ("Successfully stopped streaming from device %s tuner %u", 
+             self->device_id ? self->device_id : "unknown", 
+             self->tuner_index);
+  
   self->playing = FALSE;
   gtk_widget_set_sensitive (GTK_WIDGET (self->play_button), TRUE);
   gtk_widget_set_sensitive (GTK_WIDGET (self->stop_button), FALSE);
-  g_message ("Stopping playback");
 }
 
 static void
 on_scan_clicked (GtkButton *button,
                  HdhomerunTunerControls *self)
 {
-  (void)button; /* unused */
-  (void)self; /* unused */
+  int ret;
   
-  g_message ("Starting channel scan");
+  (void)button; /* unused */
+  
+  if (!self->hd_device) {
+    g_warning ("Cannot start channel scan: no device selected");
+    return;
+  }
+  
+  g_message ("Starting channel scan for device %s tuner %u", 
+             self->device_id ? self->device_id : "unknown", 
+             self->tuner_index);
+  
+  /* Initialize channel scan with "us-bcast" channelmap (common default for US broadcast TV) */
+  ret = hdhomerun_device_channelscan_init (self->hd_device, "us-bcast");
+  if (ret < 0) {
+    g_warning ("Failed to initialize channel scan for device %s tuner %u", 
+               self->device_id ? self->device_id : "unknown", 
+               self->tuner_index);
+    return;
+  }
+  
+  g_message ("Successfully started channel scan for device %s tuner %u", 
+             self->device_id ? self->device_id : "unknown", 
+             self->tuner_index);
+  
+  /* Note: Full channel scan implementation would require advancing through channels
+   * and detecting signals in a loop or async operation. This is a basic initialization. */
 }
 
 static gboolean
@@ -92,23 +159,79 @@ on_tune_clicked (GtkButton *button,
                  HdhomerunTunerControls *self)
 {
   const char *frequency;
+  int ret;
   
   (void)button; /* unused */
+  
+  if (!self->hd_device) {
+    g_warning ("Cannot tune: no device selected");
+    return;
+  }
   
   frequency = gtk_editable_get_text (GTK_EDITABLE (self->frequency_entry));
   
   /* Validate frequency input to prevent format string issues */
-  if (is_valid_frequency_string (frequency)) {
-    g_message ("Tuning to frequency: %s", frequency);
-  } else {
-    g_message ("Invalid or empty frequency entered");
+  if (!is_valid_frequency_string (frequency)) {
+    g_message ("Invalid or empty frequency entered for device %s tuner %u", 
+               self->device_id ? self->device_id : "unknown", 
+               self->tuner_index);
+    return;
   }
+  
+  g_message ("Tuning to frequency: %s on device %s tuner %u", 
+             frequency, 
+             self->device_id ? self->device_id : "unknown", 
+             self->tuner_index);
+  
+  /* Set the channel/frequency on the tuner */
+  ret = hdhomerun_device_set_tuner_channel (self->hd_device, frequency);
+  if (ret < 0) {
+    g_warning ("Failed to tune to frequency %s on device %s tuner %u", 
+               frequency, 
+               self->device_id ? self->device_id : "unknown", 
+               self->tuner_index);
+    return;
+  }
+  
+  g_message ("Successfully tuned to frequency %s on device %s tuner %u", 
+             frequency, 
+             self->device_id ? self->device_id : "unknown", 
+             self->tuner_index);
+}
+
+static void
+hdhomerun_tuner_controls_finalize (GObject *object)
+{
+  HdhomerunTunerControls *self = HDHOMERUN_TUNER_CONTROLS (object);
+  
+  g_message ("Cleaning up tuner controls for device %s tuner %u",
+             self->device_id ? self->device_id : "unknown",
+             self->tuner_index);
+  
+  /* Stop streaming if active */
+  if (self->playing && self->hd_device) {
+    hdhomerun_device_stream_stop (self->hd_device);
+  }
+  
+  /* Destroy the device handle */
+  if (self->hd_device) {
+    hdhomerun_device_destroy (self->hd_device);
+    self->hd_device = NULL;
+  }
+  
+  /* Free device ID string */
+  g_clear_pointer (&self->device_id, g_free);
+  
+  G_OBJECT_CLASS (hdhomerun_tuner_controls_parent_class)->finalize (object);
 }
 
 static void
 hdhomerun_tuner_controls_class_init (HdhomerunTunerControlsClass *klass)
 {
   GtkWidgetClass *widget_class = GTK_WIDGET_CLASS (klass);
+  GObjectClass *object_class = G_OBJECT_CLASS (klass);
+
+  object_class->finalize = hdhomerun_tuner_controls_finalize;
 
   gtk_widget_class_set_template_from_resource (widget_class, "/com/github/andrewstclair/HDHomeRunConfig/hdhomerun-tuner-controls.ui");
   gtk_widget_class_bind_template_child (widget_class, HdhomerunTunerControls, video_preview);
@@ -118,6 +241,7 @@ hdhomerun_tuner_controls_class_init (HdhomerunTunerControlsClass *klass)
   gtk_widget_class_bind_template_child (widget_class, HdhomerunTunerControls, channel_dropdown);
   gtk_widget_class_bind_template_child (widget_class, HdhomerunTunerControls, frequency_entry);
   gtk_widget_class_bind_template_child (widget_class, HdhomerunTunerControls, tune_button);
+  gtk_widget_class_bind_template_child (widget_class, HdhomerunTunerControls, device_info_label);
   gtk_widget_class_bind_template_callback (widget_class, on_play_clicked);
   gtk_widget_class_bind_template_callback (widget_class, on_stop_clicked);
   gtk_widget_class_bind_template_callback (widget_class, on_scan_clicked);
@@ -130,5 +254,76 @@ hdhomerun_tuner_controls_init (HdhomerunTunerControls *self)
   gtk_widget_init_template (GTK_WIDGET (self));
   
   self->playing = FALSE;
+  self->device_id = NULL;
+  self->tuner_index = 0;
+  self->hd_device = NULL;
   gtk_widget_set_sensitive (GTK_WIDGET (self->stop_button), FALSE);
+  
+  /* Initially disable controls until a tuner is selected */
+  gtk_widget_set_sensitive (GTK_WIDGET (self->play_button), FALSE);
+  gtk_widget_set_sensitive (GTK_WIDGET (self->scan_button), FALSE);
+  gtk_widget_set_sensitive (GTK_WIDGET (self->tune_button), FALSE);
+}
+
+void
+hdhomerun_tuner_controls_set_tuner (HdhomerunTunerControls *self,
+                                     const char *device_id,
+                                     guint tuner_index)
+{
+  uint32_t device_id_int;
+  char *label_text;
+  int ret;
+  
+  g_return_if_fail (HDHOMERUN_IS_TUNER_CONTROLS (self));
+  g_return_if_fail (device_id != NULL);
+  
+  g_message ("Setting tuner controls to device %s tuner %u", device_id, tuner_index);
+  
+  /* Clean up existing device if any */
+  if (self->hd_device) {
+    if (self->playing) {
+      hdhomerun_device_stream_stop (self->hd_device);
+      self->playing = FALSE;
+      gtk_widget_set_sensitive (GTK_WIDGET (self->play_button), TRUE);
+      gtk_widget_set_sensitive (GTK_WIDGET (self->stop_button), FALSE);
+    }
+    hdhomerun_device_destroy (self->hd_device);
+    self->hd_device = NULL;
+  }
+  
+  /* Store device information */
+  g_free (self->device_id);
+  self->device_id = g_strdup (device_id);
+  self->tuner_index = tuner_index;
+  
+  /* Update the device info label */
+  label_text = g_strdup_printf ("Device: %s | Tuner: %u", device_id, tuner_index);
+  gtk_label_set_text (self->device_info_label, label_text);
+  g_free (label_text);
+  
+  /* Convert device ID from hex string to integer */
+  device_id_int = (uint32_t) strtoul (device_id, NULL, 16);
+  
+  /* Create a new device handle using device ID and tuner index */
+  self->hd_device = hdhomerun_device_create (device_id_int, HDHOMERUN_DEVICE_ID_WILDCARD, tuner_index, NULL);
+  if (!self->hd_device) {
+    g_warning ("Failed to create device handle for %s tuner %u", device_id, tuner_index);
+    gtk_widget_set_sensitive (GTK_WIDGET (self->play_button), FALSE);
+    gtk_widget_set_sensitive (GTK_WIDGET (self->scan_button), FALSE);
+    gtk_widget_set_sensitive (GTK_WIDGET (self->tune_button), FALSE);
+    return;
+  }
+  
+  /* Set the tuner index on the device */
+  ret = hdhomerun_device_set_tuner (self->hd_device, tuner_index);
+  if (ret < 0) {
+    g_warning ("Failed to set tuner %u on device %s", tuner_index, device_id);
+  }
+  
+  g_message ("Successfully configured device %s tuner %u", device_id, tuner_index);
+  
+  /* Enable controls now that we have a device */
+  gtk_widget_set_sensitive (GTK_WIDGET (self->play_button), TRUE);
+  gtk_widget_set_sensitive (GTK_WIDGET (self->scan_button), TRUE);
+  gtk_widget_set_sensitive (GTK_WIDGET (self->tune_button), TRUE);
 }

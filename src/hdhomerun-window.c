@@ -216,6 +216,9 @@ on_tuner_row_activated (AdwActionRow *action_row,
   
   g_message ("Selected tuner %u on device %s", tuner_index, device_id);
   
+  /* Configure the tuner controls with the selected device and tuner */
+  hdhomerun_tuner_controls_set_tuner (self->tuner_controls, device_id, tuner_index);
+  
   /* Switch to the tuner controls view */
   gtk_stack_set_visible_child_name (self->content_stack, "tuner");
   

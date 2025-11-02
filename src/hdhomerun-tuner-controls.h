@@ -26,4 +26,8 @@ G_BEGIN_DECLS
 
 G_DECLARE_FINAL_TYPE (HdhomerunTunerControls, hdhomerun_tuner_controls, HDHOMERUN, TUNER_CONTROLS, GtkBox)
 
+void hdhomerun_tuner_controls_set_tuner (HdhomerunTunerControls *self,
+                                          const char *device_id,
+                                          guint tuner_index);
+
 G_END_DECLS
