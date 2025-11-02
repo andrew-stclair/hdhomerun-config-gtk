@@ -48,6 +48,9 @@ struct _HdhomerunWindow
 
 G_DEFINE_FINAL_TYPE (HdhomerunWindow, hdhomerun_window, ADW_TYPE_APPLICATION_WINDOW)
 
+/* Forward declarations */
+static void on_tuner_row_activated (AdwActionRow *action_row, HdhomerunWindow *self);
+
 static void
 on_add_device_response (AdwAlertDialog *dialog,
                         char *response,
@@ -187,6 +190,9 @@ on_refresh_clicked (GtkButton *button,
                   tuner_row = hdhomerun_tuner_row_new (device_id_str, i);
                   adw_expander_row_add_row (ADW_EXPANDER_ROW (row), GTK_WIDGET (tuner_row));
                   
+                  /* Connect the activated signal for this tuner row */
+                  g_signal_connect (tuner_row, "activated", G_CALLBACK (on_tuner_row_activated), self);
+                  
                   g_message ("Added tuner %u to device %s", i, device_id_str);
                 }
               
@@ -201,34 +207,28 @@ on_refresh_clicked (GtkButton *button,
 }
 
 static void
-on_device_list_row_activated (GtkListBox *box,
-                              GtkListBoxRow *row,
-                              HdhomerunWindow *self)
+on_tuner_row_activated (AdwActionRow *action_row,
+                        HdhomerunWindow *self)
 {
-  (void)box; /* unused */
+  HdhomerunTunerRow *tuner_row = HDHOMERUN_TUNER_ROW (action_row);
+  char *device_id;
+  unsigned int tuner_index;
   
-  /* Check if the activated row is a tuner row */
-  if (HDHOMERUN_IS_TUNER_ROW (row))
-    {
-      char *device_id;
-      unsigned int tuner_index;
-      
-      /* Get the tuner information */
-      g_object_get (row,
-                    "device-id", &device_id,
-                    "tuner-index", &tuner_index,
-                    NULL);
-      
-      g_message ("Selected tuner %u on device %s", tuner_index, device_id);
-      
-      /* Switch to the tuner controls view */
-      gtk_stack_set_visible_child_name (self->content_stack, "tuner");
-      
-      /* Show the split view content on mobile */
-      adw_navigation_split_view_set_show_content (self->split_view, TRUE);
-      
-      g_free (device_id);
-    }
+  /* Get the tuner information */
+  g_object_get (tuner_row,
+                "device-id", &device_id,
+                "tuner-index", &tuner_index,
+                NULL);
+  
+  g_message ("Selected tuner %u on device %s", tuner_index, device_id);
+  
+  /* Switch to the tuner controls view */
+  gtk_stack_set_visible_child_name (self->content_stack, "tuner");
+  
+  /* Show the split view content on mobile */
+  adw_navigation_split_view_set_show_content (self->split_view, TRUE);
+  
+  g_free (device_id);
 }
 
 static gboolean
@@ -274,7 +274,6 @@ hdhomerun_window_class_init (HdhomerunWindowClass *klass)
   gtk_widget_class_bind_template_child (widget_class, HdhomerunWindow, refresh_button);
   gtk_widget_class_bind_template_callback (widget_class, on_add_device_clicked);
   gtk_widget_class_bind_template_callback (widget_class, on_refresh_clicked);
-  gtk_widget_class_bind_template_callback (widget_class, on_device_list_row_activated);
 }
 
 static void

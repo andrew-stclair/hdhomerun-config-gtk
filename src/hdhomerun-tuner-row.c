@@ -138,5 +138,6 @@ hdhomerun_tuner_row_class_init (HdhomerunTunerRowClass *klass)
 static void
 hdhomerun_tuner_row_init (HdhomerunTunerRow *self)
 {
+  /* AdwActionRow is activatable by default when activated signal is connected */
   (void)self;
 }
