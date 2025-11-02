@@ -108,10 +108,8 @@ on_play_clicked (GtkButton *button,
   
   /* Initialize VLC if not already done */
   if (!self->vlc_instance) {
-    const char *vlc_args[] = {
-      "--no-xlib",  /* Don't use Xlib for X11 */
-    };
-    self->vlc_instance = libvlc_new (1, vlc_args);
+    /* No special arguments needed - let VLC auto-detect */
+    self->vlc_instance = libvlc_new (0, NULL);
     if (!self->vlc_instance) {
       g_warning ("Failed to initialize VLC");
       g_free (stream_url);
@@ -233,7 +231,9 @@ on_scan_clicked (GtkButton *button,
              self->device_id ? self->device_id : "unknown", 
              self->tuner_index);
   
-  /* Initialize channel scan with "us-bcast" channelmap (common default for US broadcast TV) */
+  /* Initialize channel scan with "us-bcast" channelmap
+   * TODO: Make channelmap configurable for international support
+   * Common options: us-bcast, us-cable, eu-bcast, au-bcast, etc. */
   ret = hdhomerun_device_channelscan_init (self->hd_device, "us-bcast");
   if (ret < 0) {
     g_warning ("Failed to initialize channel scan for device %s tuner %u", 
@@ -256,9 +256,10 @@ is_valid_frequency_string (const char *str)
   if (!str || !*str)
     return FALSE;
   
-  /* Check that the string contains only digits, decimal point, and whitespace */
+  /* Check that the string contains valid channel/frequency characters
+   * Allow digits, decimal point, whitespace, and hyphens for channel specs like "2.1" or "2-1" */
   for (const char *p = str; *p; p++) {
-    if (!g_ascii_isdigit (*p) && *p != '.' && *p != ' ')
+    if (!g_ascii_isdigit (*p) && *p != '.' && *p != ' ' && *p != '-')
       return FALSE;
   }
   
@@ -406,7 +407,6 @@ hdhomerun_tuner_controls_set_tuner (HdhomerunTunerControls *self,
   uint32_t device_id_int;
   char *label_text;
   char *endptr;
-  int ret;
   
   g_return_if_fail (HDHOMERUN_IS_TUNER_CONTROLS (self));
   g_return_if_fail (device_id != NULL);
@@ -455,22 +455,11 @@ hdhomerun_tuner_controls_set_tuner (HdhomerunTunerControls *self,
   }
   
   /* Create a new device handle using device ID and tuner index
-   * Parameters: device_id, device_ip (0 for auto-detect), tuner, debug handle */
+   * Parameters: device_id, device_ip (0 for auto-detect), tuner, debug handle
+   * We pass the tuner index here so we don't need a separate set_tuner call */
   self->hd_device = hdhomerun_device_create (device_id_int, 0, tuner_index, NULL);
   if (!self->hd_device) {
     g_warning ("Failed to create device handle for %s tuner %u", device_id, tuner_index);
-    gtk_widget_set_sensitive (GTK_WIDGET (self->play_button), FALSE);
-    gtk_widget_set_sensitive (GTK_WIDGET (self->scan_button), FALSE);
-    gtk_widget_set_sensitive (GTK_WIDGET (self->tune_button), FALSE);
-    return;
-  }
-  
-  /* Set the tuner index on the device */
-  ret = hdhomerun_device_set_tuner (self->hd_device, tuner_index);
-  if (ret < 0) {
-    g_warning ("Failed to set tuner %u on device %s", tuner_index, device_id);
-    hdhomerun_device_destroy (self->hd_device);
-    self->hd_device = NULL;
     gtk_widget_set_sensitive (GTK_WIDGET (self->play_button), FALSE);
     gtk_widget_set_sensitive (GTK_WIDGET (self->scan_button), FALSE);
     gtk_widget_set_sensitive (GTK_WIDGET (self->tune_button), FALSE);
