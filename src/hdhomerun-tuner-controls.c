@@ -978,6 +978,7 @@ on_channel_selected (GtkDropDown *dropdown,
   guint selected;
   SavedChannel *channel;
   int ret;
+  char *vchannel_to_tune = NULL;
   
   (void)pspec; /* unused */
   
@@ -1006,18 +1007,36 @@ on_channel_selected (GtkDropDown *dropdown,
              self->device_id ? self->device_id : "unknown",
              self->tuner_index);
   
+  /* Extract virtual channel number from channel_str
+   * Format is typically "703: 204 ABC NewsRadio" where 703 is the virtual channel
+   * We need the part BEFORE the colon (703), not after */
+  const char *colon = strchr (channel->channel_str, ':');
+  if (colon) {
+    /* Extract everything before the colon - that's the virtual channel number */
+    vchannel_to_tune = g_strndup (channel->channel_str, colon - channel->channel_str);
+    g_message ("Extracted virtual channel '%s' from '%s'", 
+               vchannel_to_tune, channel->channel_str);
+  }
+  
+  /* If extraction failed, use the whole channel_str as fallback */
+  if (!vchannel_to_tune) {
+    vchannel_to_tune = g_strdup (channel->channel_str);
+    g_message ("Using full channel string '%s' for tuning", vchannel_to_tune);
+  }
+  
   /* Set the channel/frequency on the tuner */
-  ret = hdhomerun_device_set_tuner_channel (self->hd_device, channel->channel_str);
+  ret = hdhomerun_device_set_tuner_channel (self->hd_device, vchannel_to_tune);
   if (ret < 0) {
     g_warning ("Failed to tune to channel %s on device %s tuner %u (ret=%d)",
-               channel->channel_str,
+               vchannel_to_tune,
                self->device_id ? self->device_id : "unknown",
                self->tuner_index);
+    g_free (vchannel_to_tune);
     return;
   }
   
   g_message ("Successfully tuned to channel %s on device %s tuner %u",
-             channel->channel_str,
+             vchannel_to_tune,
              self->device_id ? self->device_id : "unknown",
              self->tuner_index);
 }
