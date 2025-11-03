@@ -471,28 +471,40 @@ scan_advance_timeout (gpointer user_data)
     g_message ("Found %u program(s) on frequency %u (channel %s)", 
                result.program_count, result.frequency, result.channel_str);
     
-    /* Extract virtual channel number from full channel string (e.g., "au-bcast:30" -> "30") */
-    const char *vchannel = result.channel_str;
-    const char *colon = strchr (result.channel_str, ':');
-    if (colon) {
-      vchannel = colon + 1;  /* Skip the ':' */
-      g_message ("Extracted virtual channel '%s' from '%s'", vchannel, result.channel_str);
+    /* Iterate through all programs and save each virtual channel */
+    for (guint i = 0; i < result.program_count; i++) {
+      struct hdhomerun_channelscan_program_t *program = &result.programs[i];
+      const char *vchannel = program->program_str;
+      
+      /* Skip if no program string */
+      if (!vchannel || vchannel[0] == '\0') {
+        g_debug ("Skipping program %u with no program_str", i);
+        continue;
+      }
+      
+      g_message ("Found virtual channel '%s' (program %u/%u)", 
+                 vchannel, i + 1, result.program_count);
+      
+      /* Store each virtual channel separately */
+      ScannedChannel *channel = scanned_channel_new (vchannel, 
+                                                       result.frequency,
+                                                       1,  /* Each entry is for 1 program */
+                                                       program->name[0] ? program->name : NULL);
+      self->scan_state->found_channels = g_list_append (self->scan_state->found_channels, channel);
+      g_message ("Added virtual channel %s to found_channels list", vchannel);
     }
     
-    /* Store the found channel with virtual channel number */
-    ScannedChannel *channel = scanned_channel_new (vchannel, 
-                                                     result.frequency,
-                                                     result.program_count,
-                                                     NULL);
-    self->scan_state->found_channels = g_list_append (self->scan_state->found_channels, channel);
-    g_message ("Added channel %s to found_channels list", vchannel);
-    
-    /* Update status to show found channel */
-    if (self->scan_state->scan_status_label) {
-      char *status_text = g_strdup_printf ("Found channel %s (%u program%s)", 
-                                            vchannel,
-                                            result.program_count,
-                                            result.program_count == 1 ? "" : "s");
+    /* Update status to show found channels */
+    if (self->scan_state->scan_status_label && result.program_count > 0) {
+      struct hdhomerun_channelscan_program_t *first_program = &result.programs[0];
+      char *status_text;
+      if (result.program_count == 1) {
+        status_text = g_strdup_printf ("Found channel %s", first_program->program_str);
+      } else {
+        status_text = g_strdup_printf ("Found %u channels (%s, ...)", 
+                                        result.program_count,
+                                        first_program->program_str);
+      }
       gtk_label_set_label (self->scan_state->scan_status_label, status_text);
       g_free (status_text);
     }
