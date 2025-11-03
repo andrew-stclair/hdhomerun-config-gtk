@@ -471,18 +471,26 @@ scan_advance_timeout (gpointer user_data)
     g_message ("Found %u program(s) on frequency %u (channel %s)", 
                result.program_count, result.frequency, result.channel_str);
     
-    /* Store the found channel */
-    ScannedChannel *channel = scanned_channel_new (result.channel_str, 
+    /* Extract virtual channel number from full channel string (e.g., "au-bcast:30" -> "30") */
+    const char *vchannel = result.channel_str;
+    const char *colon = strchr (result.channel_str, ':');
+    if (colon) {
+      vchannel = colon + 1;  /* Skip the ':' */
+      g_message ("Extracted virtual channel '%s' from '%s'", vchannel, result.channel_str);
+    }
+    
+    /* Store the found channel with virtual channel number */
+    ScannedChannel *channel = scanned_channel_new (vchannel, 
                                                      result.frequency,
                                                      result.program_count,
                                                      NULL);
     self->scan_state->found_channels = g_list_append (self->scan_state->found_channels, channel);
-    g_message ("Added channel %s to found_channels list", result.channel_str);
+    g_message ("Added channel %s to found_channels list", vchannel);
     
     /* Update status to show found channel */
     if (self->scan_state->scan_status_label) {
       char *status_text = g_strdup_printf ("Found channel %s (%u program%s)", 
-                                            result.channel_str,
+                                            vchannel,
                                             result.program_count,
                                             result.program_count == 1 ? "" : "s");
       gtk_label_set_label (self->scan_state->scan_status_label, status_text);
