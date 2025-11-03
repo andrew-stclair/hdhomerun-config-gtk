@@ -29,6 +29,7 @@ jobs:
           libadwaita-1-dev \
           libglib2.0-dev \
           libhdhomerun-dev \
+          libvlc-dev \
           gettext \
           appstream \
           desktop-file-utils \
@@ -36,25 +37,6 @@ jobs:
           debhelper \
           devscripts \
           dpkg-dev
-    
-    - name: Create libhdhomerun pkg-config file
-      run: |
-        # Detect multiarch triplet
-        MULTIARCH=$(dpkg-architecture -qDEB_HOST_MULTIARCH)
-        sudo tee /usr/lib/${MULTIARCH}/pkgconfig/hdhomerun.pc > /dev/null <<EOF
-        prefix=/usr
-        exec_prefix=\${prefix}
-        libdir=\${exec_prefix}/lib/${MULTIARCH}
-        includedir=\${prefix}/include/libhdhomerun
-
-        Name: libhdhomerun
-        Description: HDHomeRun library
-        # The version below is hardcoded to match the current libhdhomerun release.
-        # Update this value if/when the library version changes.
-        Version: 20230719
-        Libs: -L\${libdir} -lhdhomerun
-        Cflags: -I\${includedir}
-        EOF
     
     - name: Build and test
       run: |
