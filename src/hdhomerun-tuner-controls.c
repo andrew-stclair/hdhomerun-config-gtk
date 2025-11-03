@@ -78,6 +78,7 @@ struct _HdhomerunTunerControls
   GtkButton *stop_button;
   GtkButton *scan_button;
   GtkDropDown *channel_dropdown;
+  GtkDropDown *channelmap_dropdown;
   GtkEntry *frequency_entry;
   GtkButton *tune_button;
   GtkLabel *device_info_label;
@@ -538,13 +539,15 @@ on_play_clicked (GtkButton *button,
   
   /* Initialize VLC if not already done */
   if (!self->vlc_instance) {
+    g_message ("Creating VLC instance");
     self->vlc_instance = libvlc_new (0, NULL);
     if (!self->vlc_instance) {
-      g_warning ("Failed to initialize VLC");
+      const char *vlc_error = libvlc_errmsg ();
+      g_warning ("Failed to initialize VLC: %s", vlc_error ? vlc_error : "unknown error");
       hdhomerun_device_stream_stop (self->hd_device);
       return;
     }
-    g_message ("VLC instance created");
+    g_message ("VLC instance created successfully");
   }
   
   /* Create VLC media using imem (memory input) with TS demux */
@@ -562,10 +565,12 @@ on_play_clicked (GtkButton *button,
                                                  self);
   
   if (!self->vlc_media) {
-    g_warning ("Failed to create VLC media with imem");
+    const char *vlc_error = libvlc_errmsg ();
+    g_warning ("Failed to create VLC media with imem: %s", vlc_error ? vlc_error : "unknown error");
     hdhomerun_device_stream_stop (self->hd_device);
     return;
   }
+  g_message ("VLC media created successfully");
   
   /* Add media options for TS demux */
   g_message ("Adding media options: demux=ts, no-audio");
@@ -574,20 +579,21 @@ on_play_clicked (GtkButton *button,
     g_message ("Added media option: %s", media_options[i]);
   }
   
-  g_message ("VLC media created with imem callbacks and TS demux options");
+  g_message ("VLC media configured with imem callbacks and TS demux options");
   
   /* Create VLC media player if not already done */
   if (!self->vlc_player) {
     g_message ("Creating VLC media player");
     self->vlc_player = libvlc_media_player_new (self->vlc_instance);
     if (!self->vlc_player) {
-      g_warning ("Failed to create VLC media player");
+      const char *vlc_error = libvlc_errmsg ();
+      g_warning ("Failed to create VLC media player: %s", vlc_error ? vlc_error : "unknown error");
       libvlc_media_release (self->vlc_media);
       self->vlc_media = NULL;
       hdhomerun_device_stream_stop (self->hd_device);
       return;
     }
-    g_message ("VLC media player created");
+    g_message ("VLC media player created successfully");
   }
   
   /* Set the media to the player */
@@ -630,7 +636,8 @@ on_play_clicked (GtkButton *button,
   g_message ("Calling libvlc_media_player_play");
   ret = libvlc_media_player_play (self->vlc_player);
   if (ret < 0) {
-    g_warning ("Failed to start VLC playback (ret=%d)", ret);
+    const char *vlc_error = libvlc_errmsg ();
+    g_warning ("Failed to start VLC playback (ret=%d): %s", ret, vlc_error ? vlc_error : "unknown error");
     self->playing = FALSE;
     if (self->stream_timeout_id > 0) {
       g_source_remove (self->stream_timeout_id);
@@ -742,11 +749,44 @@ on_scan_clicked (GtkButton *button,
   self->scan_state->found_channels = NULL;
   self->scan_state->channels_scanned = 0;
   
-  /* Initialize channel scan with "us-bcast" channelmap
-   * TODO: Make channelmap configurable for international support
-   * Common options: us-bcast, us-cable, eu-bcast, au-bcast, etc. */
-  g_message ("Initializing channel scan with channelmap 'us-bcast'");
-  ret = hdhomerun_device_channelscan_init (self->hd_device, "us-bcast");
+  /* Get selected channelmap from dropdown */
+  guint selected = gtk_drop_down_get_selected (self->channelmap_dropdown);
+  const char *channelmap;
+  guint estimated_channels;
+  
+  switch (selected) {
+    case 0: /* United States - Broadcast */
+      channelmap = "us-bcast";
+      estimated_channels = 69;
+      break;
+    case 1: /* United States - Cable */
+      channelmap = "us-cable";
+      estimated_channels = 135;
+      break;
+    case 2: /* European Union - Broadcast */
+      channelmap = "eu-bcast";
+      estimated_channels = 69;
+      break;
+    case 3: /* European Union - Cable */
+      channelmap = "eu-cable";
+      estimated_channels = 135;
+      break;
+    case 4: /* Australia - Broadcast */
+      channelmap = "au-bcast";
+      estimated_channels = 69;
+      break;
+    case 5: /* Australia - Cable */
+      channelmap = "au-cable";
+      estimated_channels = 135;
+      break;
+    default:
+      channelmap = "us-bcast";
+      estimated_channels = 69;
+      break;
+  }
+  
+  g_message ("Initializing channel scan with channelmap '%s'", channelmap);
+  ret = hdhomerun_device_channelscan_init (self->hd_device, channelmap);
   if (ret < 0) {
     g_warning ("Failed to initialize channel scan for device %s tuner %u (ret=%d)", 
                self->device_id ? self->device_id : "unknown", 
@@ -754,8 +794,8 @@ on_scan_clicked (GtkButton *button,
     return;
   }
   
-  /* Estimate total channels to scan (US broadcast is typically 69 channels) */
-  self->scan_state->channels_total = 69;
+  /* Set estimated total channels based on channelmap */
+  self->scan_state->channels_total = estimated_channels;
   g_message ("Estimated %u total channels to scan", self->scan_state->channels_total);
   
   /* Create scan progress dialog */
@@ -1095,6 +1135,7 @@ hdhomerun_tuner_controls_class_init (HdhomerunTunerControlsClass *klass)
   gtk_widget_class_bind_template_child (widget_class, HdhomerunTunerControls, stop_button);
   gtk_widget_class_bind_template_child (widget_class, HdhomerunTunerControls, scan_button);
   gtk_widget_class_bind_template_child (widget_class, HdhomerunTunerControls, channel_dropdown);
+  gtk_widget_class_bind_template_child (widget_class, HdhomerunTunerControls, channelmap_dropdown);
   gtk_widget_class_bind_template_child (widget_class, HdhomerunTunerControls, frequency_entry);
   gtk_widget_class_bind_template_child (widget_class, HdhomerunTunerControls, tune_button);
   gtk_widget_class_bind_template_child (widget_class, HdhomerunTunerControls, device_info_label);
@@ -1128,6 +1169,22 @@ hdhomerun_tuner_controls_init (HdhomerunTunerControls *self)
   gtk_widget_set_sensitive (GTK_WIDGET (self->scan_button), FALSE);
   gtk_widget_set_sensitive (GTK_WIDGET (self->tune_button), FALSE);
   gtk_widget_set_sensitive (GTK_WIDGET (self->channel_dropdown), FALSE);
+  
+  /* Set up channel map dropdown with user-friendly names */
+  const char *channelmap_names[] = {
+    "United States - Broadcast",
+    "United States - Cable",
+    "European Union - Broadcast",
+    "European Union - Cable",
+    "Australia - Broadcast",
+    "Australia - Cable",
+    NULL
+  };
+  
+  GtkStringList *channelmap_list = gtk_string_list_new (channelmap_names);
+  gtk_drop_down_set_model (self->channelmap_dropdown, G_LIST_MODEL (channelmap_list));
+  gtk_drop_down_set_selected (self->channelmap_dropdown, 0); /* Default to US Broadcast */
+  g_object_unref (channelmap_list);
   
   /* Connect dropdown selection signal */
   g_signal_connect (self->channel_dropdown, "notify::selected",

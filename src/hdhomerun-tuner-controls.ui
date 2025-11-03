@@ -132,6 +132,17 @@
         </child>
         <child>
           <object class="AdwActionRow">
+            <property name="title" translatable="yes">Channel Map</property>
+            <property name="subtitle" translatable="yes">Select broadcast region and type</property>
+            <child>
+              <object class="GtkDropDown" id="channelmap_dropdown">
+                <property name="valign">center</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="AdwActionRow">
             <property name="title" translatable="yes">Channel Scan</property>
             <property name="subtitle" translatable="yes">Search for available channels</property>
             <child>
