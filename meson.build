@@ -9,7 +9,9 @@ add_project_arguments('-D_GNU_SOURCE', language: 'c')
 i18n = import('i18n')
 gnome = import('gnome')
 
-subdir('old-hdhomerun-config-gui')
+libhdhomerun_proj = subproject('libhdhomerun')
+libhdhomerun_dep = libhdhomerun_proj.get_variable('libhdhomerun_dep')
+
 subdir('data')
 subdir('src')
 subdir('po')
