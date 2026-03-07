@@ -27,7 +27,8 @@ jobs:
         id: build
         with:
           arch: ${{ matrix.arch }}
-          image: debian:sid
+          distro: none
+          base_image: debian:sid
           githubToken: ${{ github.token }}
           env: |
             GITHUB_REF: ${{ github.ref }}
