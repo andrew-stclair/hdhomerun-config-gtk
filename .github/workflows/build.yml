@@ -1,0 +1,108 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ "master", "main" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "master", "main" ]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build for ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build in Debian container
+        uses: uraimo/run-on-arch-action@v2
+        id: build
+        with:
+          arch: ${{ matrix.arch }}
+          distro: debian_sid
+          githubToken: ${{ github.token }}
+          install: |
+            build-essential
+            meson
+            ninja-build
+            pkg-config
+            libgtk-4-dev
+            libadwaita-1-dev
+            git
+          env: |
+            GITHUB_REF: ${{ github.ref }}
+            GITHUB_REF_NAME: ${{ github.ref_name }}
+            GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          run: |
+            # Map architecture for .deb
+            case "${{ matrix.arch }}" in
+              amd64) ARCH_DEB="amd64" ;;
+              arm64) ARCH_DEB="arm64" ;;
+              aarch64) ARCH_DEB="arm64" ;;
+              *) ARCH_DEB="${{ matrix.arch }}" ;;
+            esac
+
+            # Determine version
+            if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+              VERSION="${GITHUB_REF_NAME#v}"
+            else
+              VERSION="0.1.0-dev-$GITHUB_RUN_NUMBER"
+            fi
+            
+            echo "Building version $VERSION for $ARCH_DEB"
+            
+            # Configure and Build
+            meson setup build --prefix=/usr --buildtype=release
+            ninja -C build
+            
+            # Stage install
+            mkdir -p staging/DEBIAN
+            DESTDIR=$(pwd)/staging ninja -C build install
+            
+            # Create control file
+            cat <<EOF > staging/DEBIAN/control
+            Package: hdhomerun-config-gtk
+            Version: $VERSION
+            Architecture: $ARCH_DEB
+            Maintainer: GitHub Actions <actions@github.com>
+            Depends: libgtk-4-1, libadwaita-1-0, libc6
+            Section: utils
+            Priority: optional
+            Description: HDHomeRun Configuration Utility
+             Modern GTK4 application to configure and manage SiliconDust HDHomeRun TV tuners.
+            EOF
+            
+            # Build .deb
+            dpkg-deb --build staging "hdhomerun-config-gtk_${VERSION}_${ARCH_DEB}.deb"
+            
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hdhomerun-config-gtk-${{ matrix.arch }}
+          path: "*.deb"
+
+  release:
+    name: Create Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.deb
+          generate_release_notes: true

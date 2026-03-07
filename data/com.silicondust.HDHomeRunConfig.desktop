@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=HDHomeRun Config
+Comment=Configure HDHomeRun devices
+Exec=hdhomerun-config-gtk
+Icon=com.silicondust.HDHomeRunConfig
+Terminal=false
+Type=Application
+Categories=GTK;GNOME;Utility;
+StartupNotify=true
+DBusActivatable=true

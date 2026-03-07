@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="HDHomeRunDeviceView" parent="AdwBin">
+    <child>
+      <object class="GtkStack" id="stack">
+        <child>
+          <object class="GtkStackPage">
+            <property name="name">empty</property>
+            <property name="child">
+              <object class="AdwStatusPage">
+                <property name="title" translatable="yes">Select a Device</property>
+                <property name="description" translatable="yes">Select an HDHomeRun device from the sidebar to view details.</property>
+                <property name="icon-name">video-display-symbolic</property>
+              </object>
+            </property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkStackPage">
+            <property name="name">details</property>
+            <property name="child">
+              <object class="GtkScrolledWindow">
+                <child>
+                  <object class="AdwClamp">
+                    <child>
+                      <object class="GtkBox">
+                        <property name="orientation">vertical</property>
+                        <property name="spacing">24</property>
+                        <property name="margin-top">32</property>
+                        <property name="margin-bottom">32</property>
+                        <property name="margin-start">12</property>
+                        <property name="margin-end">12</property>
+                        
+                        <child>
+                          <object class="AdwPreferencesGroup">
+                            <property name="title" translatable="yes">Global Settings</property>
+                            <child>
+                              <object class="AdwComboRow" id="region_combo">
+                                <property name="title" translatable="yes">Scan Region</property>
+                                <property name="model">
+                                  <object class="GtkStringList">
+                                    <items>
+                                      <item translatable="yes">Auto (Use Device Default)</item>
+                                      <item>eu-bcast</item>
+                                      <item>eu-cable</item>
+                                      <item>au-bcast</item>
+                                      <item>au-cable</item>
+                                      <item>tw-bcast</item>
+                                      <item>tw-cable</item>
+                                      <item>us-bcast</item>
+                                      <item>us-cable</item>
+                                      <item>us-hrc</item>
+                                      <item>us-irc</item>
+                                    </items>
+                                  </object>
+                                </property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+
+                        <child>
+                          <object class="AdwPreferencesGroup">
+                            <property name="title" translatable="yes">Device Information</property>
+                            <child>
+                              <object class="AdwActionRow" id="id_row">
+                                <property name="title" translatable="yes">Device ID</property>
+                                <property name="selectable">true</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="AdwActionRow" id="model_row">
+                                <property name="title" translatable="yes">Model</property>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="AdwActionRow" id="firmware_row">
+                                <property name="title" translatable="yes">Firmware Version</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+
+                        <child>
+                          <object class="AdwPreferencesGroup" id="scan_group">
+                            <property name="title" translatable="yes">Active Scan</property>
+                            <property name="visible">false</property>
+                            <child>
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">6</property>
+                                <child>
+                                  <object class="GtkLabel" id="scan_label">
+                                    <property name="xalign">0</property>
+                                    <property name="label">Scanning...</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkProgressBar" id="scan_progress">
+                                    <property name="show-text">true</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+
+                        <child>
+                          <object class="AdwPreferencesGroup">
+                            <property name="title" translatable="yes">Tuners</property>
+                            <child>
+                              <object class="GtkListBox" id="tuner_list">
+                                <property name="selection-mode">none</property>
+                                <style>
+                                  <class name="boxed-list"/>
+                                </style>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </property>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>

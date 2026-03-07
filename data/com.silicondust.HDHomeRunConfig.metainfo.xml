@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-id">
+  <id>com.silicondust.HDHomeRunConfig</id>
+  <name>HDHomeRun Config</name>
+  <summary>Configure HDHomeRun devices</summary>
+  <description>
+    <p>A modern GTK4 application to configure and manage SiliconDust HDHomeRun TV tuners.</p>
+  </description>
+  <launchable type="desktop-id">com.silicondust.HDHomeRunConfig.desktop</launchable>
+</component>
