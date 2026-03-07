@@ -37,7 +37,7 @@ jobs:
           run: |
             # Install dependencies
             apt-get update
-            apt-get install -y build-essential meson ninja-build pkg-config libgtk-4-dev libadwaita-1-dev git
+            apt-get install -y build-essential meson ninja-build pkg-config libgtk-4-dev libadwaita-1-dev git desktop-file-utils
             
             # Map architecture for .deb
             case "${{ matrix.arch }}" in
