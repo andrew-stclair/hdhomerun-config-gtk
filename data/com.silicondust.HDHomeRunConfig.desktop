@@ -7,7 +7,7 @@ Terminal=false
 Type=Application
 Categories=GTK;GNOME;Utility;
 StartupNotify=true
-DBusActivatable=true
+DBusActivatable=false
 # Mobile indicators
 X-Purism-FormFactor=Workstation;Mobile;
 X-GNOME-MobileFriendly=true
