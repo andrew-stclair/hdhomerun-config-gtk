@@ -17,7 +17,7 @@ enum {
 
 static guint signals[LAST_SIGNAL];
 
-static void on_row_selected(HDHomeRunDeviceList *self, GtkListBoxRow *row, GtkListBox *list_box)
+static void on_row_activated(HDHomeRunDeviceList *self, GtkListBoxRow *row, GtkListBox *list_box)
 {
   if (!row) return;
   
@@ -112,7 +112,7 @@ static void hdhomerun_device_list_init(HDHomeRunDeviceList *self)
 {
   gtk_widget_init_template(GTK_WIDGET(self));
   
-  g_signal_connect_swapped(self->list_box, "row-selected", G_CALLBACK(on_row_selected), self);
+  g_signal_connect_swapped(self->list_box, "row-activated", G_CALLBACK(on_row_activated), self);
 
   // Periodic discovery
   g_timeout_add_seconds(5, (GSourceFunc)discover_devices, self);
