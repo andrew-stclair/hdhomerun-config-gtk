@@ -19,13 +19,11 @@ jobs:
         include:
           - arch: x86_64
             action_arch: none
-            action_distro: none
-            action_base_image: debian:sid
+            action_base_image: --platform=linux/amd64 debian:sid
             arch_deb: amd64
           - arch: aarch64
             action_arch: aarch64
-            action_distro: unstable
-            action_base_image: none
+            action_base_image: --platform=linux/arm64 debian:sid
             arch_deb: arm64
 
     steps:
@@ -37,7 +35,7 @@ jobs:
         id: build
         with:
           arch: ${{ matrix.action_arch }}
-          distro: ${{ matrix.action_distro }}
+          distro: none
           base_image: ${{ matrix.action_base_image }}
           githubToken: ${{ github.token }}
           env: |
