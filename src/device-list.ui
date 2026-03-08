@@ -8,6 +8,7 @@
         <child>
           <object class="GtkListBox" id="list_box">
             <property name="selection-mode">single</property>
+            <property name="activate-on-single-click">True</property>
             <style>
               <class name="navigation-sidebar"/>
             </style>

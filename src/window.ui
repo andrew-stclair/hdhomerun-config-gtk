@@ -15,6 +15,7 @@
         <property name="sidebar">
           <object class="AdwNavigationPage">
             <property name="title" translatable="yes">Devices</property>
+            <property name="tag">sidebar</property>
             <property name="child">
               <object class="AdwToolbarView">
                 <child type="top">
@@ -30,6 +31,7 @@
         <property name="content">
           <object class="AdwNavigationPage" id="content_page">
             <property name="title" translatable="yes">Device Info</property>
+            <property name="tag">content</property>
             <property name="child">
               <object class="AdwToolbarView">
                 <child type="top">
