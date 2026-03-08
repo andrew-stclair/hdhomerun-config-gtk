@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        arch: [amd64, arm64]
+        arch: [x86_64, aarch64]
 
     steps:
       - name: Checkout code
@@ -41,8 +41,7 @@ jobs:
             
             # Map architecture for .deb
             case "${{ matrix.arch }}" in
-              amd64) ARCH_DEB="amd64" ;;
-              arm64) ARCH_DEB="arm64" ;;
+              x86_64) ARCH_DEB="amd64" ;;
               aarch64) ARCH_DEB="arm64" ;;
               *) ARCH_DEB="${{ matrix.arch }}" ;;
             esac
