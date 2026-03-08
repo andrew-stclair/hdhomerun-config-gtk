@@ -6,4 +6,6 @@ install_data('com.silicondust.HDHomeRunConfig.metainfo.xml',
   install_dir: get_option('datadir') / 'metainfo'
 )
 
-# Optional: icons, gschema, etc.
+install_data('com.silicondust.HDHomeRunConfig.svg',
+  install_dir: get_option('datadir') / 'icons/hicolor/scalable/apps'
+)

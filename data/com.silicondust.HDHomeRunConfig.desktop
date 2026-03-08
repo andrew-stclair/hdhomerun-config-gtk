@@ -8,3 +8,6 @@ Type=Application
 Categories=GTK;GNOME;Utility;
 StartupNotify=true
 DBusActivatable=true
+# Mobile indicators
+X-Purism-FormFactor=Workstation;Mobile;
+X-GNOME-MobileFriendly=true

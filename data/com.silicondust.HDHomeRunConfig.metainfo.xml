@@ -3,8 +3,15 @@
   <id>com.silicondust.HDHomeRunConfig</id>
   <name>HDHomeRun Config</name>
   <summary>Configure HDHomeRun devices</summary>
+  <icon type="stock">com.silicondust.HDHomeRunConfig</icon>
   <description>
     <p>A modern GTK4 application to configure and manage SiliconDust HDHomeRun TV tuners.</p>
   </description>
   <launchable type="desktop-id">com.silicondust.HDHomeRunConfig.desktop</launchable>
+  <recommends>
+    <control>touch</control>
+    <control>keyboard</control>
+    <control>pointing</control>
+    <display_length compare="ge">360</display_length>
+  </recommends>
 </component>
