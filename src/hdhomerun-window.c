@@ -13,9 +13,9 @@ struct _HDHomeRunWindow {
 
 G_DEFINE_TYPE(HDHomeRunWindow, hdhomerun_window, ADW_TYPE_APPLICATION_WINDOW)
 
-static void on_device_selected(HDHomeRunWindow *self, uint32_t device_id, uint32_t tuner_count, HDHomeRunDeviceList *list)
+static void on_device_selected(HDHomeRunWindow *self, uint32_t device_id, uint32_t tuner_count)
 {
-  g_message("Window: Device selected %08X, showing content", device_id);
+  g_message("Window: Signal received! Device %08X, Tuners %u", device_id, tuner_count);
   hdhomerun_device_view_set_device(self->device_view, device_id, tuner_count);
   adw_navigation_split_view_set_show_content(self->split_view, TRUE);
 }

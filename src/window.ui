@@ -19,7 +19,10 @@
             <property name="child">
               <object class="AdwToolbarView">
                 <child type="top">
-                  <object class="AdwHeaderBar"/>
+                  <object class="AdwHeaderBar">
+                    <property name="show-end-title-buttons">True</property>
+                    <property name="show-start-title-buttons">True</property>
+                  </object>
                 </child>
                 <property name="content">
                   <object class="HDHomeRunDeviceList" id="device_list"/>
@@ -35,7 +38,10 @@
             <property name="child">
               <object class="AdwToolbarView">
                 <child type="top">
-                  <object class="AdwHeaderBar"/>
+                  <object class="AdwHeaderBar">
+                    <property name="show-end-title-buttons">True</property>
+                    <property name="show-start-title-buttons">True</property>
+                  </object>
                 </child>
                 <property name="content">
                   <object class="HDHomeRunDeviceView" id="device_view"/>

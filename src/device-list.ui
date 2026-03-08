@@ -3,22 +3,36 @@
   <template class="HDHomeRunDeviceList" parent="GtkBox">
     <property name="orientation">vertical</property>
     <child>
-      <object class="GtkScrolledWindow">
+      <object class="GtkStack" id="stack">
         <property name="vexpand">true</property>
         <child>
-          <object class="GtkListBox" id="list_box">
-            <property name="selection-mode">single</property>
-            <property name="activate-on-single-click">True</property>
-            <style>
-              <class name="navigation-sidebar"/>
-            </style>
-            <child>
+          <object class="GtkStackPage">
+            <property name="name">empty</property>
+            <property name="child">
               <object class="AdwStatusPage" id="status_page">
                 <property name="title" translatable="yes">No Devices Found</property>
                 <property name="description" translatable="yes">Scanning for HDHomeRun devices on your network...</property>
                 <property name="icon-name">network-transmit-receive-symbolic</property>
               </object>
-            </child>
+            </property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkStackPage">
+            <property name="name">list</property>
+            <property name="child">
+              <object class="GtkScrolledWindow">
+                <child>
+                  <object class="GtkListBox" id="list_box">
+                    <property name="selection-mode">single</property>
+                    <property name="activate-on-single-click">True</property>
+                    <style>
+                      <class name="navigation-sidebar"/>
+                    </style>
+                  </object>
+                </child>
+              </object>
+            </property>
           </object>
         </child>
       </object>

@@ -1,6 +1,7 @@
 #include "hdhomerun-device-view.h"
 #include "hdhomerun.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 struct _HDHomeRunDeviceView {
   AdwBin parent_instance;
@@ -37,26 +38,26 @@ static void on_freq_applied(AdwEntryRow *row, gpointer user_data)
   uint32_t tuner_index = GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(row), "tuner-index"));
   const char *text = gtk_editable_get_text(GTK_EDITABLE(row));
 
-  g_message("UI: Setting tuner %u to %s", tuner_index, text);
+  g_message("DeviceView: Setting tuner %u to %s", tuner_index, text);
   
   if (self->hd) {
     hdhomerun_device_set_tuner(self->hd, tuner_index);
     if (hdhomerun_device_set_tuner_channel(self->hd, text) <= 0) {
-      g_warning("UI: Failed to set channel/frequency to %s", text);
+      g_warning("DeviceView: Failed to set channel/frequency to %s", text);
     }
   }
 }
 
 static gboolean poll_tuner_status(HDHomeRunDeviceView *self)
 {
-  if (!self->hd) return G_SOURCE_REMOVE;
+  if (!self->hd) return G_SOURCE_CONTINUE;
 
   GtkWidget *child = gtk_widget_get_first_child(GTK_WIDGET(self->tuner_list));
   uint32_t i = 0;
   while (child) {
     if (ADW_IS_EXPANDER_ROW(child)) {
       hdhomerun_device_set_tuner(self->hd, i);
-      char *status_str;
+      char *status_str = NULL;
       struct hdhomerun_tuner_status_t status;
       
       if (hdhomerun_device_get_tuner_status(self->hd, &status_str, &status) > 0) {
@@ -78,6 +79,7 @@ static gboolean poll_tuner_status(HDHomeRunDeviceView *self)
           g_autofree char *val = g_strdup_printf("%u%%", status.symbol_error_quality);
           adw_action_row_set_subtitle(seq_row, val);
         }
+        // status_str is a pointer into internal buffer, DO NOT free.
       }
     }
     child = gtk_widget_get_next_sibling(child);
@@ -89,6 +91,7 @@ static gboolean poll_tuner_status(HDHomeRunDeviceView *self)
 
 static void refresh_tuners(HDHomeRunDeviceView *self, uint32_t tuner_count)
 {
+  g_message("DeviceView: Refreshing %u tuners", tuner_count);
   GtkWidget *child;
   while ((child = gtk_widget_get_first_child(GTK_WIDGET(self->tuner_list)))) {
     gtk_list_box_remove(self->tuner_list, child);
@@ -109,7 +112,6 @@ static void refresh_tuners(HDHomeRunDeviceView *self, uint32_t tuner_count)
     // Entry for frequency
     AdwEntryRow *freq_row = ADW_ENTRY_ROW(adw_entry_row_new());
     adw_preferences_row_set_title(ADW_PREFERENCES_ROW(freq_row), "Set Channel / Frequency");
-    // AdwEntryRow doesn't have a placeholder property, but we can set a tooltip
     gtk_widget_set_tooltip_text(GTK_WIDGET(freq_row), "e.g. 816500000 or au-bcast:69");
     adw_entry_row_set_show_apply_button(freq_row, TRUE);
     adw_expander_row_add_row(ADW_EXPANDER_ROW(expander), GTK_WIDGET(freq_row));
@@ -163,7 +165,7 @@ static void scan_task_func(GTask *task, gpointer source_object, gpointer task_da
 
   g_message("Background: Starting scan on device %08X tuner %u", self->current_device_id, tuner);
 
-  struct hdhomerun_device_t *hd = hdhomerun_device_create_from_str(g_strdup_printf("%08X", self->current_device_id), NULL);
+  struct hdhomerun_device_t *hd = hdhomerun_device_create(self->current_device_id, 0, 0, NULL);
   if (!hd) {
     g_task_return_boolean(task, FALSE);
     return;
@@ -179,7 +181,7 @@ static void scan_task_func(GTask *task, gpointer source_object, gpointer task_da
     scan_group = gtk_string_list_get_string(list, selected_index);
     g_message("Scan: Using user-selected region: %s", scan_group);
   } else {
-    char *channelmap;
+    char *channelmap = NULL;
     if (hdhomerun_device_get_tuner_channelmap(hd, &channelmap) <= 0) {
       g_warning("Scan: Failed to get channelmap");
       hdhomerun_device_destroy(hd);
@@ -188,6 +190,7 @@ static void scan_task_func(GTask *task, gpointer source_object, gpointer task_da
     }
     scan_group = hdhomerun_channelmap_get_channelmap_scan_group(channelmap);
     g_message("Scan: Using device default region: %s", scan_group);
+    // channelmap is a pointer into internal buffer, DO NOT free.
   }
 
   if (hdhomerun_device_channelscan_init(hd, scan_group) <= 0) {
@@ -242,9 +245,7 @@ static void on_scan_clicked(GtkButton *button, gpointer user_data)
 
 void hdhomerun_device_view_set_device(HDHomeRunDeviceView *self, uint32_t device_id, uint32_t tuner_count)
 {
-  if (self->current_device_id == device_id) return;
-
-  g_message("UI: Switching to device %08X", device_id);
+  g_message("DeviceView: Switching to device %08X", device_id);
 
   if (self->hd) {
     hdhomerun_device_destroy(self->hd);
@@ -253,23 +254,25 @@ void hdhomerun_device_view_set_device(HDHomeRunDeviceView *self, uint32_t device
 
   self->current_device_id = device_id;
   self->current_tuner_count = tuner_count;
-  self->hd = hdhomerun_device_create_from_str(g_strdup_printf("%08X", device_id), NULL);
+  self->hd = hdhomerun_device_create(device_id, 0, 0, NULL);
 
   if (self->hd) {
     const char *model = hdhomerun_device_get_model_str(self->hd);
-    char *version;
+    char *version = NULL;
     hdhomerun_device_get_version(self->hd, &version, NULL);
 
     g_autofree char *id_str = g_strdup_printf("%08X", device_id);
     adw_action_row_set_subtitle(self->id_row, id_str);
     adw_action_row_set_subtitle(self->model_row, model ? model : "Unknown");
     adw_action_row_set_subtitle(self->firmware_row, version ? version : "Unknown");
+    // version is a pointer into internal buffer, DO NOT free.
 
     refresh_tuners(self, tuner_count);
 
     gtk_stack_set_visible_child_name(self->stack, "details");
     gtk_widget_set_visible(GTK_WIDGET(self->scan_group), FALSE);
   } else {
+    g_warning("DeviceView: Failed to create device %08X", device_id);
     gtk_stack_set_visible_child_name(self->stack, "empty");
   }
 }

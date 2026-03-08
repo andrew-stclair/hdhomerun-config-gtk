@@ -4,6 +4,7 @@
 struct _HDHomeRunDeviceList {
   GtkBox parent_instance;
 
+  GtkStack *stack;
   GtkListBox *list_box;
   AdwStatusPage *status_page;
 };
@@ -17,12 +18,15 @@ enum {
 
 static guint signals[LAST_SIGNAL];
 
-static void on_row_activated(HDHomeRunDeviceList *self, GtkListBoxRow *row, GtkListBox *list_box)
+static void on_row_selected(HDHomeRunDeviceList *self, GtkListBoxRow *row, GtkListBox *list_box G_GNUC_UNUSED)
 {
   if (!row) return;
   
   uint32_t device_id = GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(row), "device-id"));
   uint32_t tuner_count = GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(row), "tuner-count"));
+  
+  g_message("DeviceList: Row selected for device %08X, Tuners %u", device_id, tuner_count);
+  
   if (device_id == 0) return;
 
   g_signal_emit(self, signals[DEVICE_SELECTED], 0, device_id, tuner_count);
@@ -39,7 +43,6 @@ static void add_device(HDHomeRunDeviceList *self, uint32_t device_id, const char
   g_object_set_data(G_OBJECT(row), "tuner-count", GUINT_TO_POINTER(tuner_count));
   
   gtk_list_box_append(self->list_box, row);
-  gtk_widget_set_visible(GTK_WIDGET(self->status_page), FALSE);
 }
 
 static gboolean discover_devices(HDHomeRunDeviceList *self)
@@ -50,38 +53,46 @@ static gboolean discover_devices(HDHomeRunDeviceList *self)
   uint32_t device_types[1] = { HDHOMERUN_DEVICE_TYPE_WILDCARD };
   int ret = hdhomerun_discover2_find_devices_broadcast(ds, HDHOMERUN_DISCOVER_FLAGS_IPV4_GENERAL, device_types, 1);
   
-  if (ret > 0) {
-    // Clear existing (except status page)
-    GtkWidget *child;
-    while ((child = gtk_widget_get_first_child(GTK_WIDGET(self->list_box)))) {
-        if (child == GTK_WIDGET(self->status_page)) {
-             // Keep it but hide it if we have devices
-             gtk_widget_set_visible(child, FALSE);
-             // Let's just remove everything and re-add status if empty.
-        }
-        gtk_list_box_remove(self->list_box, child);
-    }
-
+  if (ret >= 0) {
     struct hdhomerun_discover2_device_t *device = hdhomerun_discover2_iter_device_first(ds);
     int count = 0;
-    while (device) {
-      uint32_t device_id = hdhomerun_discover2_device_get_device_id(device);
-      uint32_t tuner_count = hdhomerun_discover2_device_get_tuner_count(device);
-      struct hdhomerun_discover2_device_if_t *device_if = hdhomerun_discover2_iter_device_if_first(device);
-      if (device_id != 0 && device_if) {
-        struct sockaddr_storage ip_addr;
-        hdhomerun_discover2_device_if_get_ip_addr(device_if, &ip_addr);
-        char ip_str[64];
-        hdhomerun_sock_sockaddr_to_ip_str(ip_str, (struct sockaddr *)&ip_addr, true);
-        add_device(self, device_id, ip_str, tuner_count);
-        count++;
-      }
-      device = hdhomerun_discover2_iter_device_next(device);
+    
+    // Only clear if we actually found something to display
+    if (ret > 0) {
+        GtkWidget *child;
+        while ((child = gtk_widget_get_first_child(GTK_WIDGET(self->list_box)))) {
+            gtk_list_box_remove(self->list_box, child);
+        }
+
+        while (device) {
+          uint32_t device_id = hdhomerun_discover2_device_get_device_id(device);
+          uint32_t tuner_count = hdhomerun_discover2_device_get_tuner_count(device);
+          struct hdhomerun_discover2_device_if_t *device_if = hdhomerun_discover2_iter_device_if_first(device);
+          if (device_id != 0 && device_if) {
+            struct sockaddr_storage ip_addr;
+            hdhomerun_discover2_device_if_get_ip_addr(device_if, &ip_addr);
+            char ip_str[64];
+            hdhomerun_sock_sockaddr_to_ip_str(ip_str, (struct sockaddr *)&ip_addr, 1);
+            add_device(self, device_id, ip_str, tuner_count);
+            count++;
+          }
+          device = hdhomerun_discover2_iter_device_next(device);
+        }
+    } else {
+        // No devices found in this scan
+        // If the list is empty, show the empty page
+        if (gtk_widget_get_first_child(GTK_WIDGET(self->list_box)) == NULL) {
+            count = 0;
+        } else {
+            // Keep existing list
+            count = 1; 
+        }
     }
     
-    if (count == 0) {
-        gtk_list_box_append(self->list_box, GTK_WIDGET(self->status_page));
-        gtk_widget_set_visible(GTK_WIDGET(self->status_page), TRUE);
+    if (count > 0) {
+        gtk_stack_set_visible_child_name(self->stack, "list");
+    } else {
+        gtk_stack_set_visible_child_name(self->stack, "empty");
     }
   }
 
@@ -96,6 +107,7 @@ static void hdhomerun_device_list_class_init(HDHomeRunDeviceListClass *klass)
   g_type_ensure (ADW_TYPE_STATUS_PAGE);
 
   gtk_widget_class_set_template_from_resource(widget_class, "/com/silicondust/HDHomeRunConfig/device-list.ui");
+  gtk_widget_class_bind_template_child(widget_class, HDHomeRunDeviceList, stack);
   gtk_widget_class_bind_template_child(widget_class, HDHomeRunDeviceList, list_box);
   gtk_widget_class_bind_template_child(widget_class, HDHomeRunDeviceList, status_page);
 
@@ -112,9 +124,10 @@ static void hdhomerun_device_list_init(HDHomeRunDeviceList *self)
 {
   gtk_widget_init_template(GTK_WIDGET(self));
   
-  g_signal_connect_swapped(self->list_box, "row-activated", G_CALLBACK(on_row_activated), self);
+  g_signal_connect_swapped(self->list_box, "row-selected", G_CALLBACK(on_row_selected), self);
 
+  // Initial discovery
+  discover_devices(self);
   // Periodic discovery
-  g_timeout_add_seconds(5, (GSourceFunc)discover_devices, self);
-  discover_devices(self); // Initial discovery
+  g_timeout_add_seconds(10, (GSourceFunc)discover_devices, self);
 }
