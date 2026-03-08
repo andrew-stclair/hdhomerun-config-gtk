@@ -16,36 +16,40 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        arch: [x86_64, aarch64]
+        include:
+          - arch: x86_64
+            action_arch: none
+            action_distro: none
+            action_base_image: debian:sid
+            arch_deb: amd64
+          - arch: aarch64
+            action_arch: aarch64
+            action_distro: unstable
+            action_base_image: none
+            arch_deb: arm64
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Build in Debian container
-        uses: uraimo/run-on-arch-action@v2
+        uses: uraimo/run-on-arch-action@v3
         id: build
         with:
-          arch: ${{ matrix.arch }}
-          distro: none
-          base_image: debian:sid
+          arch: ${{ matrix.action_arch }}
+          distro: ${{ matrix.action_distro }}
+          base_image: ${{ matrix.action_base_image }}
           githubToken: ${{ github.token }}
           env: |
             GITHUB_REF: ${{ github.ref }}
             GITHUB_REF_NAME: ${{ github.ref_name }}
             GITHUB_RUN_NUMBER: ${{ github.run_number }}
+            ARCH_DEB: ${{ matrix.arch_deb }}
           run: |
             # Install dependencies
             apt-get update
             apt-get install -y build-essential meson ninja-build pkg-config libgtk-4-dev libadwaita-1-dev git desktop-file-utils
             
-            # Map architecture for .deb
-            case "${{ matrix.arch }}" in
-              x86_64) ARCH_DEB="amd64" ;;
-              aarch64) ARCH_DEB="arm64" ;;
-              *) ARCH_DEB="${{ matrix.arch }}" ;;
-            esac
-
             # Determine version
             if [[ "$GITHUB_REF" == refs/tags/* ]]; then
               VERSION="${GITHUB_REF_NAME#v}"
