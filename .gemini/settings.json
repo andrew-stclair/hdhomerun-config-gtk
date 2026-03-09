@@ -1,0 +1,11 @@
+{
+  "general": {
+    "defaultApprovalMode": "auto_edit"
+  },
+  "mcpServers": {
+    "linux-desktop-mcp": {
+      "command": "uvx",
+      "args": ["linux-desktop-mcp"]
+    }
+  }
+}
