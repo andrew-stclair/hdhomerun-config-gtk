@@ -96,3 +96,13 @@ To compile and test the application, follow these steps:
    - `DeviceList: Row selected for device [ID]`
    - `DeviceView: Refreshing [N] tuners`
 
+4. **Interact with the UI:**
+   Use `desktop_click` to interact with elements identified via `desktop_snapshot` or `desktop_find`.
+   ```bash
+   # Find a device in the list or a specific button
+   # desktop_find(query="HDHomeRun device")
+   
+   # Click the element using its reference ID (e.g., ref_5)
+   # desktop_click(ref="ref_5", element="HDHomeRun Device Row")
+   ```
+
